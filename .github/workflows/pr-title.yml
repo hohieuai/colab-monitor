@@ -1,0 +1,25 @@
+name: PR title
+
+# Pull requests are squash-merged, so the title becomes the commit message on main.
+# Require Conventional Commits, for example "fix: handle missing config (#12)" after merging.
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions: {}
+
+jobs:
+  conventional-title:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check that the title follows Conventional Commits
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          pattern='^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([a-z0-9._/-]+\))?!?: [a-z0-9].*[^.]$'
+          if [[ "$TITLE" =~ $pattern ]]; then
+            echo "OK: $TITLE"
+          else
+            echo "::error::Use a Conventional Commits title, for example 'fix: handle missing config'. Got: $TITLE"
+            exit 1
+          fi
