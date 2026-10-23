@@ -101,7 +101,7 @@ def test_active_machines_show_uptime_idle_and_rate(page, site):
     rows = page.locator("#ov-sessions li")
     gpu = rows.filter(has_text="train-gpu")
     assert "up 1 h" in gpu.inner_text() and "≈1.41 / hr" in gpu.inner_text()
-    assert "idle 16 min" in rows.filter(has_text="eval-cpu").inner_text()
+    assert re.search(r"idle 1[6-9] min", rows.filter(has_text="eval-cpu").inner_text())  # 1000 s + test time
 
 
 def test_jobs_card(page, site):
@@ -130,9 +130,11 @@ def test_spending_card(page, site):
 def test_stalled_job_is_flagged(page, stalled_site):
     open_route(page, stalled_site, "overview", "#ov-jobs li")
     job = page.locator('#ov-jobs li[data-job="train-gpu.log"]')
-    expect(job.locator(".badge.warn")).to_have_text("Silent 20 min")
+    expect(job.locator(".badge.warn")).to_have_text(re.compile(r"^Silent 2\d min$"))
     stalled = page.locator('#attention-list li[data-kind="stalled"]')
-    assert "train-gpu.log has printed nothing for 20 min while train-gpu runs" in stalled.inner_text()
+    assert re.search(
+        r"train-gpu.log has printed nothing for 2\d min while train-gpu runs", stalled.inner_text()
+    )
 
 
 def test_active_machines_and_recent_activity(page, site):
@@ -229,10 +231,9 @@ def test_sessions_uptime_and_rate_columns(page, site):
     assert headers[3:5] == ["Uptime", "Rate"]
     gpu = page.locator("#sessions-body tr", has_text="train-gpu")
     cells = gpu.locator("td").all_inner_texts()
-    assert cells[3] == "1 h" and cells[4] == "≈1.41 / hr"
-    assert page.get_attribute('#sessions-body tr:has-text("eval-cpu") td[data-label="Uptime"]', "title") == (
-        "Idle for 16 min"
-    )
+    assert re.fullmatch(r"1 h( \d+ min)?", cells[3]) and cells[4] == "≈1.41 / hr"
+    idle = page.get_attribute('#sessions-body tr:has-text("eval-cpu") td[data-label="Uptime"]', "title")
+    assert re.fullmatch(r"Idle for 1[6-9] min", idle)  # 1000 s, plus the time the run has taken
 
 
 @pytest.mark.parametrize(
