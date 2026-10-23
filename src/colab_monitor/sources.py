@@ -5,6 +5,7 @@ Session tokens and runtime proxy URLs never leave this module.
 """
 
 import collections
+import datetime
 import json
 import os
 import re
@@ -313,3 +314,108 @@ def history_endpoints(history_dir: str = DEFAULT_HISTORY_DIR) -> dict:
         for endpoint, info in found.items():
             result.setdefault(endpoint, info)
     return result
+
+
+def _epoch(timestamp: str | None) -> float | None:
+    try:
+        return datetime.datetime.fromisoformat(timestamp).timestamp() if timestamp else None
+    except ValueError:
+        return None
+
+
+def _error_text(outputs) -> str | None:
+    for out in outputs if isinstance(outputs, list) else []:
+        if isinstance(out, dict) and out.get("output_type") == "error":
+            return strip_ansi(f"{out.get('ename', 'Error')}: {out.get('evalue', '')}")
+    return None
+
+
+def _timelines_in_file(path: str, name: str) -> dict:
+    """Per-machine timelines from one history file. A name can be reused, so key by endpoint."""
+    found: dict = {}
+    current = None
+    try:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                t = _epoch(event.get("timestamp"))
+                kind = event.get("event_type")
+                if t is None:
+                    continue
+                if kind == "session_created" and event.get("endpoint"):
+                    current = {
+                        "name": name,
+                        "accelerator": event.get("accelerator"),
+                        "created": t,
+                        "ended": None,
+                        "last_activity": t,
+                        "executions": [],
+                        "last_error": None,
+                    }
+                    found[event["endpoint"]] = current
+                elif current is None:
+                    continue
+                elif kind == "execution":
+                    error = _error_text(event.get("outputs"))
+                    current["executions"].append((t, error is not None))
+                    current["last_activity"] = max(current["last_activity"], t)
+                    if error:
+                        current["last_error"] = error
+                elif kind == "session_terminated":
+                    current["ended"] = t
+                    current["last_activity"] = max(current["last_activity"], t)
+    except OSError:
+        return {}
+    return found
+
+
+# (path) -> (mtime, size, timelines); history files only grow, so unchanged files are not re-read.
+_timeline_cache: dict[str, tuple[float, int, dict]] = {}
+
+
+def session_timelines(history_dir: str = DEFAULT_HISTORY_DIR) -> dict:
+    """Endpoint -> timeline (name, accelerator, created, ended, last_activity, executions, last_error).
+
+    Times are epoch seconds. `executions` lists `(time, failed)` for each run of code.
+    """
+    result: dict = {}
+    for name in history_names(history_dir):
+        path = os.path.join(history_dir, f"{name}.jsonl")
+        try:
+            st = os.stat(path)
+        except OSError:
+            continue
+        cached = _timeline_cache.get(path)
+        if cached and cached[0] == st.st_mtime and cached[1] == st.st_size:
+            found = cached[2]
+        else:
+            found = _timelines_in_file(path, name)
+            _timeline_cache[path] = (st.st_mtime, st.st_size, found)
+        result.update(found)
+    return result
+
+
+# (path) -> (mtime, size, lines)
+_tail_cache: dict[str, tuple[float, int, list[str]]] = {}
+
+
+def log_tails(logs: Iterable[dict], lines: int = 200) -> list[dict]:
+    """The last lines of each existing log from `discover_logs`, reusing reads of unchanged files."""
+    tails = []
+    for log in logs:
+        if not log.get("exists"):
+            continue
+        key = (log["mtime"], log["size"])
+        cached = _tail_cache.get(log["path"])
+        if cached and cached[:2] == key:
+            text = cached[2]
+        else:
+            text = tail_lines(log["path"], max_lines=lines)
+            _tail_cache[log["path"]] = (*key, text)
+        tails.append(
+            {"name": log["name"], "path": log["path"], "mtime": log["mtime"], "lines": text[-lines:]}
+        )
+    return tails

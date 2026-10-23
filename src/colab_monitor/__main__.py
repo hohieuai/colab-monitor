@@ -1,5 +1,5 @@
 import sys
 
-from colab_monitor.server import main
+from colab_monitor.cli import main
 
 sys.exit(main())

@@ -262,3 +262,58 @@ def test_state_on_a_machine_without_cli_state(tmp_path, monkeypatch):
     status, body = app.handle("/api/state", {})
     assert status == 200
     assert body["sessions"] == []
+
+
+class TestInsightsApi:
+    def test_state_includes_insights_and_per_session_metrics(self, dashboard):
+        app, _ = dashboard
+        _, body = app.handle("/api/state", {})
+        ins = body["insights"]
+        assert ins["schema"] == 1
+        assert set(ins) >= {
+            "spend",
+            "runway",
+            "idle_cost",
+            "machine_hours_7d",
+            "runs",
+            "jobs",
+            "attention",
+            "thresholds",
+        }
+        assert "machines" not in ins  # merged into each session instead
+        by_endpoint = {s["endpoint"]: s for s in body["sessions"]}
+        assert set(by_endpoint["e1"]["metrics"]) == {
+            "uptime_s",
+            "idle_s",
+            "rate",
+            "rate_estimated",
+            "cost",
+            "idle_cost",
+        }
+        assert [a["kind"] for a in ins["attention"]][:1] == ["orphan"]  # e2 is an orphan in the fixture
+
+    def test_thresholds_from_the_query(self, dashboard):
+        app, _ = dashboard
+        _, body = app.handle("/api/state", {"idle_alert": "90", "stall_alert": "5", "runway_alert": "24"})
+        assert body["insights"]["thresholds"] == {
+            "idle_minutes": 90.0,
+            "stall_minutes": 5.0,
+            "runway_hours": 24.0,
+        }
+
+    @pytest.mark.parametrize("query", [{"idle_alert": "-1"}, {"stall_alert": "abc"}, {"runway_alert": "0"}])
+    def test_invalid_thresholds_are_rejected(self, dashboard, query):
+        app, _ = dashboard
+        status, body = app.handle("/api/state", query)
+        assert status == 400 and "must be a positive number" in body["error"]
+
+    def test_default_thresholds_come_from_the_dashboard(self, tmp_path):
+        from colab_monitor.metrics import Thresholds
+
+        app = Dashboard(
+            None,
+            history_dir=str(tmp_path),
+            thresholds=Thresholds(idle_minutes=10, stall_minutes=3, runway_hours=6),
+        )
+        _, body = app.handle("/api/state", {})
+        assert body["insights"]["thresholds"] == {"idle_minutes": 10, "stall_minutes": 3, "runway_hours": 6}

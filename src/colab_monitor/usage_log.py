@@ -19,6 +19,8 @@ class UsageLog:
     def __init__(self, path: str = DEFAULT_PATH):
         self.path = path
         self._lock = threading.Lock()
+        # (mtime_ns, size, samples): the dashboard reads every few seconds, the file changes each minute.
+        self._cache: tuple[int, int, list[dict]] | None = None
 
     def append(self, usage: dict, now: float | None = None) -> None:
         sample = {
@@ -32,6 +34,16 @@ class UsageLog:
                 f.write(json.dumps(sample) + "\n")
 
     def read(self, since: float | None = None) -> list[dict]:
+        try:
+            st = os.stat(self.path)
+        except OSError:
+            return []
+        if self._cache is None or self._cache[:2] != (st.st_mtime_ns, st.st_size):
+            self._cache = (st.st_mtime_ns, st.st_size, self._read_all())
+        samples = self._cache[2]
+        return samples if since is None else [p for p in samples if p["t"] >= since]
+
+    def _read_all(self) -> list[dict]:
         points = []
         try:
             with open(self.path, encoding="utf-8") as f:
@@ -42,8 +54,7 @@ class UsageLog:
                         continue
                     if not isinstance(p, dict) or not {"t", "balance", "rate"} <= p.keys():
                         continue
-                    if since is None or p["t"] >= since:
-                        points.append(p)
+                    points.append(p)
         except OSError:
             return []
         return points

@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Colab Monitor</title>
-<link rel="icon" href="/favicon.svg?v=2" type="image/svg+xml">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2">
+<link rel="icon" href="/favicon.svg?v=3" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=3">
 <meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
 <script src="/theme.js"></script>
@@ -72,14 +72,15 @@
           <div class="notice-body"></div>
         </div>
       </div>
-      <div class="alert" id="orphan-alert" hidden>
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.5L15 14H1L8 1.5z" stroke-linejoin="round"/><path d="M8 6v3.5M8 11.5v.5" stroke-linecap="round"/></svg>
-        <div>
-          <div class="alert-title" id="orphan-title"></div>
-          <div class="alert-body">The CLI has no record of these machines, so nothing will stop them. Release one with
-            <code>uvx --from google-colab-cli python -c "from colab_cli.common import state; state.client.unassign('ENDPOINT')"</code></div>
+      <section class="attention" id="attention" aria-labelledby="attention-title" hidden>
+        <div class="attention-head">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.5L15 14H1L8 1.5z" stroke-linejoin="round"/><path d="M8 6v3.5M8 11.5v.5" stroke-linecap="round"/></svg>
+          <h2 id="attention-title">Needs attention</h2>
         </div>
-      </div>
+        <ul class="attention-list" id="attention-list"></ul>
+        <div class="attention-hint" id="orphan-hint" hidden>The colab CLI can't stop an orphan. Release one with
+          <code>uvx --from google-colab-cli python -c "from colab_cli.common import state; state.client.unassign('ENDPOINT')"</code></div>
+      </section>
 
       <section class="stats" aria-label="Compute units">
         <div class="card stat">
@@ -90,7 +91,7 @@
         <div class="card stat">
           <div class="stat-label"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 12l4-4 3 3 5-6" stroke-linecap="round" stroke-linejoin="round"/></svg>Usage rate</div>
           <div class="stat-value" id="s-rate">–</div>
-          <div class="stat-foot">Units per hour, all machines</div>
+          <div class="stat-foot" id="s-rate-foot">Units per hour, all machines</div>
         </div>
         <div class="card stat">
           <div class="stat-label"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8.5" r="5.5"/><path d="M8 5.5v3l2 1M6.5 1.5h3" stroke-linecap="round"/></svg>Runway</div>
@@ -153,6 +154,17 @@
           <ul class="rows" id="ov-activity"></ul>
         </section>
       </div>
+
+      <div class="split">
+        <section class="card">
+          <div class="card-head"><h2>Jobs</h2><a class="link" href="#/logs">View logs →</a></div>
+          <ul class="rows jobs" id="ov-jobs"></ul>
+        </section>
+        <section class="card">
+          <div class="card-head"><h2>Spending</h2><span class="faint small" id="spend-since"></span></div>
+          <dl class="figures" id="ov-spend"></dl>
+        </section>
+      </div>
     </main>
 
     <!-- Sessions -->
@@ -183,7 +195,7 @@
       <section class="card">
         <div class="table-wrap" id="sessions-table">
           <table>
-            <thead><tr><th>Name</th><th>Status</th><th>Hardware</th><th>Job</th><th>Last run</th></tr></thead>
+            <thead><tr><th>Name</th><th>Status</th><th>Hardware</th><th class="num">Uptime</th><th class="num">Rate</th><th>Job</th><th>Last run</th></tr></thead>
             <tbody id="sessions-body"></tbody>
           </table>
         </div>

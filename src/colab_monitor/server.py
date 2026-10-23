@@ -1,6 +1,7 @@
 """HTTP server and command-line entry point for colab-monitor."""
 
 import argparse
+import dataclasses
 import datetime
 import importlib.resources
 import ipaddress
@@ -14,7 +15,7 @@ from collections.abc import Iterable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from colab_monitor import __version__, sources
+from colab_monitor import __version__, metrics, sources
 from colab_monitor.poller import MIN_INTERVAL, ApiPoller
 from colab_monitor.usage_log import DEFAULT_PATH as DEFAULT_USAGE_LOG
 from colab_monitor.usage_log import RETENTION_SECONDS, UsageLog, downsample
@@ -44,6 +45,7 @@ class Dashboard:
         log_dirs: Iterable[str] = (),
         usage_log: UsageLog | None = None,
         auth: str | None = None,
+        thresholds: metrics.Thresholds = metrics.Thresholds(),  # noqa: B008 - frozen dataclass
     ):
         self.poller = poller
         self.usage_log = usage_log
@@ -58,10 +60,15 @@ class Dashboard:
         self.history_dir = history_dir
         self.log_files = list(log_files)
         self.log_dirs = list(log_dirs)
+        self.thresholds = thresholds
 
     def handle(self, path: str, query: dict) -> tuple[int, dict]:
         if path == "/api/state":
-            return 200, self._state()
+            try:
+                thresholds = self._thresholds(query)
+            except ValueError as e:
+                return 400, {"error": str(e)}
+            return 200, self._state(thresholds)
         if path == "/api/log":
             return self._log(query)
         if path == "/api/history":
@@ -73,7 +80,26 @@ class Dashboard:
             return 200, {"events": sources.recent_activity(self.history_dir, limit=limit)}
         return 404, {"error": "not found"}
 
-    def _state(self) -> dict:
+    def _thresholds(self, query: dict) -> metrics.Thresholds:
+        """Alert thresholds: the dashboard's defaults, overridden per request by the query."""
+        values = {}
+        for param, field in (
+            ("idle_alert", "idle_minutes"),
+            ("stall_alert", "stall_minutes"),
+            ("runway_alert", "runway_hours"),
+        ):
+            if param in query:
+                try:
+                    value = float(query[param])
+                except ValueError:
+                    value = -1.0
+                if not value > 0:
+                    raise ValueError(f"{param} must be a positive number")
+                values[field] = value
+        return dataclasses.replace(self.thresholds, **values)
+
+    def _state(self, thresholds: metrics.Thresholds | None = None) -> dict:
+        thresholds = thresholds or self.thresholds
         if self.poller is None:
             api = {"enabled": False, "usage": None, "assignments": None, "error": None}
         else:
@@ -83,12 +109,28 @@ class Dashboard:
             local, api["assignments"], sources.history_endpoints(self.history_dir)
         )
         api.pop("assignments")
+        logs = sources.discover_logs(self.log_files, self.log_dirs)
+        now = time.time()
+        samples = self.usage_log.read(since=now - 30 * 86400) if self.usage_log else []
+        insights = metrics.compute_insights(
+            sessions,
+            sources.session_timelines(self.history_dir),
+            samples,
+            sources.log_tails(logs),
+            api.get("usage"),
+            now=now,
+            thresholds=thresholds,
+        )
+        machines = insights.pop("machines")
+        for s in sessions:
+            s["metrics"] = machines.get(s["endpoint"])
         return {
             "version": __version__,
             "generated_at": datetime.datetime.now(datetime.UTC).isoformat(),
             "api": api,
             "sessions": sessions,
-            "logs": sources.discover_logs(self.log_files, self.log_dirs),
+            "logs": logs,
+            "insights": insights,
             "log_dirs": self.log_dirs,
             "history": sources.history_names(self.history_dir),
             "config": {
@@ -247,19 +289,8 @@ def _colab_fetchers(client):
     return usage, assignments
 
 
-def _parse_args(argv):
-    p = argparse.ArgumentParser(
-        prog="colab-monitor",
-        description="Local web dashboard for Colab sessions run with the colab CLI.",
-    )
-    p.add_argument("--host", default="127.0.0.1", help="bind address (default: 127.0.0.1)")
-    p.add_argument("--port", type=int, default=DEFAULT_PORT, help=f"port (default: {DEFAULT_PORT})")
-    p.add_argument(
-        "--interval",
-        type=float,
-        default=60.0,
-        help=f"seconds between Colab API checks, min {MIN_INTERVAL:.0f} (default: 60)",
-    )
+def add_data_options(p: argparse.ArgumentParser) -> None:
+    """Options that say where Colab Monitor reads from. Shared by every command."""
     p.add_argument(
         "--log",
         action="append",
@@ -302,16 +333,74 @@ def _parse_args(argv):
         help="where chart samples are kept (default: ~/.config/colab-monitor/usage.jsonl)",
     )
     p.add_argument("--no-api", action="store_true", help="never call Colab; show local files only")
-    p.add_argument("--open", action="store_true", help="open the dashboard in a browser")
-    p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
-    args = p.parse_args(argv)
-    if args.interval < MIN_INTERVAL:
-        p.error(f"--interval must be at least {MIN_INTERVAL:.0f} seconds")
+
+
+def add_threshold_options(p: argparse.ArgumentParser) -> None:
+    """When a machine, job, or the balance needs attention. Unset means the default."""
+    d = metrics.Thresholds()
+    p.add_argument(
+        "--idle-alert",
+        type=float,
+        metavar="MINUTES",
+        help=f"flag machines idle for this long (default: {d.idle_minutes:g})",
+    )
+    p.add_argument(
+        "--stall-alert",
+        type=float,
+        metavar="MINUTES",
+        help=f"flag running jobs whose log is silent for this long (default: {d.stall_minutes:g})",
+    )
+    p.add_argument(
+        "--runway-alert",
+        type=float,
+        metavar="HOURS",
+        help=f"flag when compute units run out within this time (default: {d.runway_hours:g})",
+    )
+
+
+def finish_args(p: argparse.ArgumentParser, args: argparse.Namespace) -> argparse.Namespace:
+    """Validate and normalise the shared options."""
+    for name in ("idle_alert", "stall_alert", "runway_alert"):
+        value = getattr(args, name, None)
+        if value is not None and not value > 0:
+            p.error(f"--{name.replace('_', '-')} must be a positive number")
     if args.log_dir is None:
         args.log_dir = [DEFAULT_LOG_DIR]
     args.config = [os.path.expanduser(c) for c in (args.config or [sources.DEFAULT_SESSIONS_PATH])]
     args.log_dir = [os.path.expanduser(d) for d in args.log_dir]
     return args
+
+
+def thresholds_from(args: argparse.Namespace) -> metrics.Thresholds:
+    d = metrics.Thresholds()
+    return metrics.Thresholds(
+        idle_minutes=args.idle_alert or d.idle_minutes,
+        stall_minutes=args.stall_alert or d.stall_minutes,
+        runway_hours=args.runway_alert or d.runway_hours,
+    )
+
+
+def _parse_args(argv):
+    p = argparse.ArgumentParser(
+        prog="colab-monitor serve",
+        description="Start the web dashboard. This is the default when no command is given.",
+    )
+    p.add_argument("--host", default="127.0.0.1", help="bind address (default: 127.0.0.1)")
+    p.add_argument("--port", type=int, default=DEFAULT_PORT, help=f"port (default: {DEFAULT_PORT})")
+    p.add_argument(
+        "--interval",
+        type=float,
+        default=60.0,
+        help=f"seconds between Colab API checks, min {MIN_INTERVAL:.0f} (default: 60)",
+    )
+    add_data_options(p)
+    add_threshold_options(p)
+    p.add_argument("--open", action="store_true", help="open the dashboard in a browser")
+    p.add_argument("--version", action="version", version=f"colab-monitor {__version__}")
+    args = p.parse_args(argv)
+    if args.interval < MIN_INTERVAL:
+        p.error(f"--interval must be at least {MIN_INTERVAL:.0f} seconds")
+    return finish_args(p, args)
 
 
 def _err(message: str) -> None:
@@ -357,6 +446,7 @@ def main(argv=None) -> int:
         log_dirs=args.log_dir,
         usage_log=usage_log,
         auth=None if args.no_api else args.auth,
+        thresholds=thresholds_from(args),
     )
 
     # Claim the port before signing in, so a clash is reported straight away.

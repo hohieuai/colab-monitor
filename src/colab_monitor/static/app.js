@@ -36,6 +36,21 @@
     if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
     return `${Math.floor(s / 86400)}d ago`;
   };
+  // Same wording as the status command: "45 s", "42 min", "2 h 10 min", "3 days".
+  const dur = (sec) => {
+    if (sec == null || Number.isNaN(sec)) return "–";
+    const s = Math.max(0, Math.floor(sec));
+    if (s < 60) return `${s} s`;
+    if (s < 3600) return `${Math.floor(s / 60)} min`;
+    if (s < 2 * 86400) { const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return m ? `${h} h ${m} min` : `${h} h`; }
+    return `${Math.floor(s / 86400)} days`;
+  };
+  // "Mon 16:29" within six days either way, a date otherwise.
+  const when = (ms) => new Date(ms).toLocaleString(undefined, Math.abs(ms - Date.now()) < 6 * 86400e3
+    ? { weekday: "short", hour: "2-digit", minute: "2-digit" }
+    : { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  // Rates split from the account total are estimates: mark them with ≈.
+  const rateText = (m) => (m?.rate == null ? "–" : `${m.rate_estimated ? "≈" : ""}${fmt(m.rate)} / hr`);
   const bytes = (n) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`);
   const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
   const getJSON = async (url) => {
@@ -178,18 +193,20 @@
     else lede = `${plural(live.length, "machine")} on your account, using ${fmt(u.rate_per_hour)} units an hour.` + (counts.idle ? ` ${counts.idle} ${counts.idle === 1 ? "is" : "are"} idle and still billing.` : "");
     $("lede").textContent = lede;
 
-    $("orphan-alert").hidden = counts.orphan === 0;
-    $("orphan-title").textContent = `${plural(counts.orphan, "orphaned machine")} still using compute units`;
+    renderAttention(state.insights);
 
     $("s-balance").replaceChildren(u ? fmt(u.balance) : "–");
     $("s-rate").replaceChildren(...(u ? [fmt(u.rate_per_hour), el("span", { className: "unit", textContent: "/ hr" })] : ["–"]));
+    const spent = state.insights.spend.today;
+    $("s-rate-foot").textContent = spent != null ? `${fmt(spent)} spent today` : "Units per hour, all machines";
     const runway = $("s-runway");
     runway.className = "stat-value";
-    if (u && u.rate_per_hour > 0) {
-      const h = u.balance / u.rate_per_hour;
+    const h = state.insights.runway.hours;
+    if (u && h != null) {
       runway.replaceChildren(...(h >= 48 ? [fmt(h / 24, 1), el("span", { className: "unit", textContent: "days" })] : [fmt(h, 1), el("span", { className: "unit", textContent: "hours" })]));
-      if (h < 12) runway.classList.add("bad"); else if (h < 48) runway.classList.add("warn");
-      $("s-runway-foot").textContent = "At the current rate";
+      if (h < state.insights.thresholds.runway_hours) runway.classList.add("bad"); else if (h < 48) runway.classList.add("warn");
+      const empty = state.insights.runway.empty_at;
+      $("s-runway-foot").textContent = empty ? `Runs out ${when(empty * 1000)}` : "At the current rate";
     } else {
       runway.replaceChildren(u ? "No burn" : "–");
       $("s-runway-foot").textContent = u ? "Nothing is billing right now" : "At the current rate";
@@ -209,9 +226,85 @@
         el("span", { className: `ev-icon ${s.status === "busy" ? "run" : s.status === "orphan" ? "bad" : ""}` }, icon(ICON.chip)),
         el("div", { className: "grow" },
           el("div", { className: `title${s.name ? "" : " faint"}`, textContent: s.name ?? "Unknown machine" }),
-          el("div", { className: "meta", textContent: [hardware(s), s.running].filter(Boolean).join(" · ") || s.endpoint })),
+          el("div", { className: "meta", textContent: machineMeta(s) })),
+        s.metrics?.rate != null ? el("span", { className: "rate", textContent: rateText(s.metrics), title: s.metrics.rate_estimated ? "Estimated from the account's usage rate" : "" }) : null,
         statusPill(s.status))));
     }
+    renderJobs(state.insights.jobs);
+    renderSpend(state.insights);
+  }
+
+  function machineMeta(s) {
+    const m = s.metrics ?? {};
+    return [
+      hardware(s),
+      s.running,
+      m.uptime_s != null ? `up ${dur(m.uptime_s)}` : null,
+      m.idle_s ? `idle ${dur(m.idle_s)}` : null,
+    ].filter(Boolean).join(" · ") || s.endpoint;
+  }
+
+  function renderAttention(ins) {
+    const items = ins.attention;
+    const box = $("attention");
+    box.hidden = items.length === 0;
+    box.classList.toggle("critical", items.some((a) => a.severity === "critical"));
+    $("attention-title").textContent = items.length === 1 ? "1 thing needs attention" : `${items.length} things need attention`;
+    $("attention-list").replaceChildren(...items.map((a) => el("li", { dataset: { kind: a.kind } },
+      el("span", { className: `sev ${a.severity}` }), el("span", { textContent: a.message }))));
+    $("orphan-hint").hidden = !items.some((a) => a.kind === "orphan");
+  }
+
+  const openLog = (path) => { selectedLog = path; store.set("log", path); };
+  function renderJobs(jobs) {
+    const list = $("ov-jobs");
+    if (!jobs.length) {
+      list.replaceChildren(el("li", { className: "empty", style: "display:block" },
+        el("div", { className: "empty-title", textContent: "No job logs" }),
+        el("div", { className: "empty-desc", textContent: `Send a job's output to ${shortDir(state.log_dirs[0] ?? "~/colab-runs")} to follow it here.` })));
+      return;
+    }
+    const newest = [...jobs].sort((a, b) => (a.silent_s ?? Infinity) - (b.silent_s ?? Infinity)).slice(0, 6);
+    list.replaceChildren(...newest.map((j) => {
+      const pct = j.progress != null ? Math.floor(j.progress * 100) : null;  // rounded down, like tqdm
+      const readings = [j.speed, ...Object.entries(j.metrics ?? {}).slice(0, 3).map(([k, v]) => `${k} ${String(Number(Number(v).toPrecision(4)))}`)];
+      const facts = [
+        j.session && `on ${j.session}`,
+        ...(pct == null && !readings.some(Boolean) ? ["No progress printed yet"] : readings),
+        j.silent_s != null && !j.stalled && `updated ${j.silent_s < 5 ? "just now" : `${dur(j.silent_s)} ago`}`,
+      ].filter(Boolean);
+      const name = el("a", { className: "job-name", href: "#/logs", textContent: j.name, title: tildify(j.path) });
+      name.addEventListener("click", () => openLog(j.path));
+      return el("li", { dataset: { job: j.name } },
+        el("span", { className: `ev-icon ${j.last_error ? "bad" : j.stalled ? "" : "run"}` }, icon(j.last_error ? ICON.err : ICON.file)),
+        el("div", { className: "grow" },
+          el("div", { className: "job-top" },
+            el("div", { className: "title" }, name),
+            j.stalled ? el("span", { className: "badge warn", textContent: `Silent ${dur(j.silent_s)}` }) : null,
+            pct != null ? el("span", { className: "job-pct", textContent: j.eta_s ? `${pct}% · ${dur(j.eta_s)} left` : `${pct}%` }) : null),
+          el("div", { className: "meta", textContent: facts.join(" · ") }),
+          pct != null ? el("div", { className: "bar", attrs: { role: "progressbar", "aria-valuenow": String(pct), "aria-valuemin": "0", "aria-valuemax": "100", "aria-label": `${j.name} progress` } },
+            el("span", { style: `width:${Math.min(100, Math.max(0, pct))}%` })) : null,
+          j.last_error ? el("div", { className: "job-err", textContent: j.last_error, title: j.last_error }) : null));
+    }));
+  }
+
+  function renderSpend(ins) {
+    const s = ins.spend;
+    const hours = Object.entries(ins.machine_hours_7d).sort(([a], [b]) => a.localeCompare(b));
+    const runs = ins.runs["24h"];
+    const rows = [
+      ["Today", fmt(s.today)],
+      ["Last 7 days", fmt(s["7d"])],
+      ["Last 30 days", fmt(s["30d"])],
+      ["Spent while idle", ins.idle_cost ? `≈${fmt(ins.idle_cost)}` : "–"],
+      ["Machine hours, 7 days", hours.length ? hours.map(([k, v]) => `${k} ${fmt(v, 1)}`).join(" · ") : "–"],
+      ["Runs, 24 hours", runs.ok + runs.failed ? `${runs.ok} finished · ${runs.failed} failed` : "–"],
+    ];
+    $("ov-spend").replaceChildren(...rows.flatMap(([k, v]) => [el("dt", { textContent: k }), el("dd", { textContent: v })]));
+    // Spend counts only what the dashboard saw, so say when that started.
+    const since = s.measured_since;
+    $("spend-since").textContent = since && since * 1000 > Date.now() - 29 * 86400e3 ? `Measured since ${when(since * 1000)}` : "";
   }
 
   const EVENT = {
@@ -463,6 +556,10 @@
           el("div", { className: "ep", textContent: s.endpoint ?? "" })),
         el("td", { className: "st", title: hint ?? "" }, statusPill(s.status), hint ? el("span", { className: "status-hint", textContent: hint }) : null),
         el("td", { className: "meta-cell", dataset: { label: "Hardware" } }, hardware(s) ? el("span", { className: "tag", textContent: hardware(s) }) : "–"),
+        el("td", { className: `num meta-cell${s.metrics?.uptime_s != null ? "" : " empty-val"}`, dataset: { label: "Uptime" }, textContent: dur(s.metrics?.uptime_s),
+          title: s.metrics?.idle_s ? `Idle for ${dur(s.metrics.idle_s)}` : "" }),
+        el("td", { className: `num meta-cell${s.metrics?.rate != null ? "" : " empty-val"}`, dataset: { label: "Rate" }, textContent: rateText(s.metrics),
+          title: s.metrics?.rate_estimated && s.metrics?.rate != null ? "Estimated from the account's usage rate" : "" }),
         el("td", { className: `job meta-cell${s.running ? "" : " empty-val"}`, dataset: { label: "Job" }, textContent: s.running ?? "–", title: s.running ?? "" }),
         el("td", { className: `sub meta-cell${t ? "" : " empty-val"}`, dataset: { label: "Last run" }, textContent: t ? `${baseName(s.last_execution.source) || "code"} · ${rel(t)}` : "–", title: t ? `${s.last_execution.source ?? ""}\n${s.last_execution.time}` : "" }));
     }));

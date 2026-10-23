@@ -371,3 +371,100 @@ class TestSeveralStateFiles:
         _write_sessions(b, {"job": _session("job", "e2")})
         merged = sources.merge_sessions(sources.local_sessions([str(a), str(b)]), [{"endpoint": "e2"}])
         assert merged[0]["status"] == "idle"
+
+
+class TestSessionTimelines:
+    def _write(self, history_dir, name, events):
+        with open(os.path.join(history_dir, f"{name}.jsonl"), "w") as f:
+            f.writelines(json.dumps(e) + "\n" for e in events)
+
+    def test_builds_one_timeline_per_machine(self, tmp_path):
+        self._write(
+            tmp_path,
+            "train",
+            [
+                {
+                    "timestamp": "2026-10-23T10:00:00+00:00",
+                    "event_type": "session_created",
+                    "endpoint": "e1",
+                    "accelerator": "T4",
+                },
+                {
+                    "timestamp": "2026-10-23T10:05:00+00:00",
+                    "event_type": "execution",
+                    "outputs": [{"output_type": "stream", "text": "ok"}],
+                },
+                {
+                    "timestamp": "2026-10-23T10:09:00+00:00",
+                    "event_type": "execution",
+                    "outputs": [
+                        {"output_type": "error", "ename": "\x1b[31mValueError\x1b[0m", "evalue": "bad"}
+                    ],
+                },
+                {
+                    "timestamp": "2026-10-23T10:10:00+00:00",
+                    "event_type": "session_terminated",
+                    "reason": "run_failed",
+                },
+                {
+                    "timestamp": "2026-10-23T11:00:00+00:00",
+                    "event_type": "session_created",
+                    "endpoint": "e2",
+                    "accelerator": "NONE",
+                },
+            ],
+        )
+        t = sources.session_timelines(str(tmp_path))
+        base = 1792749600.0  # 2026-10-23T10:00:00Z
+        assert t["e1"] == {
+            "name": "train",
+            "accelerator": "T4",
+            "created": base,
+            "ended": base + 600,
+            "last_activity": base + 600,
+            "executions": [(base + 300, False), (base + 540, True)],
+            "last_error": "ValueError: bad",
+        }
+        assert t["e2"]["ended"] is None and t["e2"]["accelerator"] == "NONE" and t["e2"]["executions"] == []
+
+    def test_ignores_events_before_any_creation_and_bad_lines(self, tmp_path):
+        (tmp_path / "x.jsonl").write_text(
+            '{"timestamp": "2026-10-23T10:00:00+00:00", "event_type": "execution"}\nnot json\n'
+        )
+        assert sources.session_timelines(str(tmp_path)) == {}
+
+    def test_rereads_a_file_only_when_it_changes(self, tmp_path, monkeypatch):
+        self._write(
+            tmp_path,
+            "a",
+            [{"timestamp": "2026-10-23T10:00:00+00:00", "event_type": "session_created", "endpoint": "e1"}],
+        )
+        first = sources.session_timelines(str(tmp_path))
+        calls = []
+        real = sources._timelines_in_file
+        monkeypatch.setattr(sources, "_timelines_in_file", lambda *a: calls.append(a) or real(*a))
+        assert sources.session_timelines(str(tmp_path)) == first and calls == []
+        with open(tmp_path / "a.jsonl", "a") as f:
+            f.write(
+                json.dumps({"timestamp": "2026-10-23T10:30:00+00:00", "event_type": "session_terminated"})
+                + "\n"
+            )
+        assert sources.session_timelines(str(tmp_path))["e1"]["ended"] is not None and len(calls) == 1
+
+
+class TestLogTails:
+    def test_tails_every_log_with_its_mtime(self, tmp_path):
+        p = tmp_path / "train.log"
+        p.write_text("a\nb\nc\n")
+        [tail] = sources.log_tails(
+            [{"name": "train.log", "path": str(p), "exists": True, "mtime": 5.0, "size": 6}], lines=2
+        )
+        assert tail == {"name": "train.log", "path": str(p), "mtime": 5.0, "lines": ["b", "c"]}
+
+    def test_skips_missing_files(self):
+        assert (
+            sources.log_tails(
+                [{"name": "x.log", "path": "/nope/x.log", "exists": False, "mtime": None, "size": 0}]
+            )
+            == []
+        )
