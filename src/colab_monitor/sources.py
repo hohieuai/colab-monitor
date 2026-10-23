@@ -28,10 +28,13 @@ def strip_ansi(text: str) -> str:
 
 def local_sessions(config_path: str | None = None) -> list[dict]:
     """Sessions the CLI knows about, from sessions.json, without secrets."""
-    if config_path and not os.path.exists(config_path):
+    path = config_path or os.path.expanduser("~/.config/colab-cli/sessions.json")
+    # Check first: StateStore creates its lock file and folders, and fails if the folder is
+    # missing. Colab Monitor is read-only, so a machine without CLI state just has no sessions.
+    if not os.path.exists(path):
         return []
     result = []
-    for s in StateStore(config_path).list().values():
+    for s in StateStore(path).list().values():
         last = None
         if s.last_execution:
             source, _, when = s.last_execution

@@ -333,3 +333,12 @@ class TestMergeWithHistory:
         )
         assert s["status"] == "orphan"
         assert s["name"] == "other"
+
+
+class TestFreshMachine:
+    """A machine where the colab CLI has never run: no ~/.config/colab-cli at all."""
+
+    def test_no_cli_state_means_no_sessions_and_no_files_created(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HOME", str(tmp_path))
+        assert sources.local_sessions() == []
+        assert not (tmp_path / ".config").exists()  # read-only: never create the CLI's folders

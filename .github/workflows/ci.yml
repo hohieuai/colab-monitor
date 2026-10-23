@@ -16,8 +16,8 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
       - run: uv sync --locked
       - run: uv run ruff format --check .
       - run: uv run ruff check .
@@ -31,8 +31,8 @@ jobs:
         os: [ubuntu-latest, macos-latest]
         python: ["3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
         with:
           python-version: ${{ matrix.python }}
       - run: uv sync --locked
@@ -46,12 +46,12 @@ jobs:
   package:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
       - run: uv build
       - name: Install the wheel into a clean environment and smoke-test it
         run: scripts/smoke_test.sh dist/*.whl
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/

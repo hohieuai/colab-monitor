@@ -254,3 +254,11 @@ def test_security_headers(dashboard):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_state_on_a_machine_without_cli_state(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app = Dashboard(None, history_dir=str(tmp_path / "history"))
+    status, body = app.handle("/api/state", {})
+    assert status == 200
+    assert body["sessions"] == []
