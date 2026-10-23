@@ -18,7 +18,7 @@ colab-monitor [--host HOST] [--port PORT] [--interval SECONDS]
 | `--interval SECONDS` | `60` | Seconds between Colab checks. The minimum is 30. |
 | `--log FILE` | none | A log file to show. Repeat the option to show more files. |
 | `--log-dir DIR` | `~/colab-runs` | A folder whose `.log`, `.out`, and `.err` files are shown. Subfolders are not read. Repeat the option to read more folders. Any `--log-dir` replaces the default. |
-| `--config FILE` | `~/.config/colab-cli/sessions.json` | The session state file of the `colab` CLI. |
+| `--config FILE` | `~/.config/colab-cli/sessions.json` | A session state file of the `colab` CLI. Repeat the option to read several files, for example the default file and each file passed to `colab --config`. A machine listed in more than one file is shown once. Any `--config` replaces the default. |
 | `--history-dir DIR` | `~/.config/colab-cli/history` | The history folder of the `colab` CLI. |
 | `--auth {oauth2,adc}` | `oauth2` | Sign-in method. Same as `colab --auth`. |
 | `-c FILE`, `--client-oauth-config FILE` | `~/.colab-cli-oauth-config.json` | OAuth client configuration. Same as `colab -c`. |
@@ -40,7 +40,7 @@ colab-monitor [--host HOST] [--port PORT] [--interval SECONDS]
 
 | Path | Access | Contents |
 |---|---|---|
-| `~/.config/colab-cli/sessions.json` | Read | The sessions that the CLI tracks. Colab Monitor removes their access tokens and runtime URLs before it sends anything to the page. |
+| `~/.config/colab-cli/sessions.json` and other `--config` files | Read | The sessions that the CLI tracks. Colab Monitor removes their access tokens and runtime URLs before it sends anything to the page. |
 | `~/.config/colab-cli/history/*.jsonl` | Read | One file for each session, with the events that the CLI recorded. |
 | `~/.config/colab-cli/token.json` | Read and updated | The CLI's sign-in token, used through the CLI's own sign-in code when `--auth oauth2` is set. |
 | Files from `--log` and `--log-dir` | Read | Job output. The page shows at most the last 2,000 lines of the selected file, read from its last 256 KB. |

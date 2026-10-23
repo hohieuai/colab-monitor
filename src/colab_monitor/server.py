@@ -38,7 +38,7 @@ class Dashboard:
     def __init__(
         self,
         poller: ApiPoller | None,
-        sessions_path: str | None = None,
+        sessions_path: str | Iterable[str] | None = None,
         history_dir: str = sources.DEFAULT_HISTORY_DIR,
         log_files: Iterable[str] = (),
         log_dirs: Iterable[str] = (),
@@ -48,7 +48,13 @@ class Dashboard:
         self.poller = poller
         self.usage_log = usage_log
         self.auth = auth
-        self.sessions_path = sessions_path
+        # One state file or several: agents isolate runs with `colab --config FILE`.
+        if sessions_path is None:
+            self.sessions_paths = [os.path.expanduser(sources.DEFAULT_SESSIONS_PATH)]
+        elif isinstance(sessions_path, str):
+            self.sessions_paths = [sessions_path]
+        else:
+            self.sessions_paths = list(sessions_path)
         self.history_dir = history_dir
         self.log_files = list(log_files)
         self.log_dirs = list(log_dirs)
@@ -72,7 +78,7 @@ class Dashboard:
             api = {"enabled": False, "usage": None, "assignments": None, "error": None}
         else:
             api = {"enabled": True, **self.poller.snapshot()}
-        local = sources.local_sessions(self.sessions_path)
+        local = sources.local_sessions(self.sessions_paths)
         sessions = sources.merge_sessions(
             local, api["assignments"], sources.history_endpoints(self.history_dir)
         )
@@ -92,7 +98,7 @@ class Dashboard:
                 "log_files": self.log_files,
                 "log_dirs": self.log_dirs,
                 "history_dir": self.history_dir,
-                "sessions_path": self.sessions_path or "~/.config/colab-cli/sessions.json",
+                "sessions_paths": self.sessions_paths,
                 "usage_log": self.usage_log.path if self.usage_log else None,
             },
         }
@@ -269,7 +275,12 @@ def _parse_args(argv):
         help=f"show every *.log/*.out/*.err in DIR (repeatable, default: {DEFAULT_LOG_DIR})",
     )
     p.add_argument(
-        "--config", help="colab CLI session state file (default: ~/.config/colab-cli/sessions.json)"
+        "--config",
+        action="append",
+        default=None,
+        metavar="FILE",
+        help="colab CLI session state file, repeatable to match `colab --config` "
+        "(default: ~/.config/colab-cli/sessions.json)",
     )
     p.add_argument(
         "--history-dir",
@@ -298,6 +309,7 @@ def _parse_args(argv):
         p.error(f"--interval must be at least {MIN_INTERVAL:.0f} seconds")
     if args.log_dir is None:
         args.log_dir = [DEFAULT_LOG_DIR]
+    args.config = [os.path.expanduser(c) for c in (args.config or [sources.DEFAULT_SESSIONS_PATH])]
     args.log_dir = [os.path.expanduser(d) for d in args.log_dir]
     return args
 

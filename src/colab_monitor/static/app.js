@@ -685,7 +685,7 @@
       ["Last error", api.error ?? "None"],
     ]);
     kvRows($("set-sources"), [
-      ["Sessions file", tildify(c.sessions_path)],
+      ["Session files", c.sessions_paths.map(tildify).join("\n")],
       ["History folder", tildify(c.history_dir)],
       ["Log folders", c.log_dirs.map(tildify).join("\n") || "–"],
       ["Log files", c.log_files.map(tildify).join("\n") || "–"],

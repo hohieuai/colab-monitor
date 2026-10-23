@@ -26,11 +26,33 @@ def strip_ansi(text: str) -> str:
     return _ANSI.sub("", text)
 
 
-def local_sessions(config_path: str | None = None) -> list[dict]:
-    """Sessions the CLI knows about, from sessions.json, without secrets."""
-    path = config_path or os.path.expanduser("~/.config/colab-cli/sessions.json")
+# Expanded when used, not at import, so a changed HOME (tests, sandboxes) is respected.
+DEFAULT_SESSIONS_PATH = "~/.config/colab-cli/sessions.json"
+
+
+def local_sessions(config_paths: str | Iterable[str] | None = None) -> list[dict]:
+    """Sessions the CLI knows about, without secrets.
+
+    Agents often isolate their runs with `colab --config FILE`, so this reads several state files
+    and lists each machine once, from the first file that has it.
+    """
+    if config_paths is None:
+        config_paths = [DEFAULT_SESSIONS_PATH]
+    elif isinstance(config_paths, str):
+        config_paths = [config_paths]
+    result: list[dict] = []
+    seen: set[str] = set()
+    for path in config_paths:
+        for session in _sessions_in(os.path.expanduser(path)):
+            if session["endpoint"] not in seen:
+                seen.add(session["endpoint"])
+                result.append(session)
+    return result
+
+
+def _sessions_in(path: str) -> list[dict]:
     # Check first: StateStore creates its lock file and folders, and fails if the folder is
-    # missing. Colab Monitor is read-only, so a machine without CLI state just has no sessions.
+    # missing. Colab Monitor is read-only, so a missing file just has no sessions.
     if not os.path.exists(path):
         return []
     result = []

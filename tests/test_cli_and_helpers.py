@@ -243,3 +243,18 @@ class TestAlreadyRunning:
             busy.close()
         assert code == 1
         assert f"--port {port + 1}" in capsys.readouterr().err
+
+
+class TestSeveralConfigs:
+    def test_config_is_repeatable(self):
+        args = server._parse_args(["--config", "/tmp/a.json", "--config", "~/b.json"])
+        assert args.config == ["/tmp/a.json", os.path.expanduser("~/b.json")]
+
+    def test_config_defaults_to_the_cli_state_file(self):
+        assert server._parse_args([]).config == [os.path.expanduser("~/.config/colab-cli/sessions.json")]
+
+    def test_state_lists_every_config(self, tmp_path):
+        a, b = tmp_path / "a.json", tmp_path / "b.json"
+        app = server.Dashboard(None, sessions_path=[str(a), str(b)], history_dir=str(tmp_path))
+        _, body = app.handle("/api/state", {})
+        assert body["config"]["sessions_paths"] == [str(a), str(b)]
