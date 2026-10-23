@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- An agent skill, `skills/colab-monitor/SKILL.md`, that teaches AI coding agents to start Colab
+  Monitor in the background and read its API.
+
 ## [0.1.0] - 2026-10-24
 
 First release.

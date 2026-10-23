@@ -84,6 +84,8 @@ Colab Monitor with `--log-dir`.
   its requests to Colab, and how it protects your data.
 - [Troubleshooting](docs/troubleshooting.md) covers sign-in errors, port conflicts, missing logs,
   and orphaned machines.
+- The [agent skill](skills/colab-monitor/SKILL.md) teaches AI coding agents to start Colab Monitor
+  and read its API.
 - The [security policy](SECURITY.md) explains how to report a vulnerability.
 - The [contributing guide](CONTRIBUTING.md) explains how to set up a development copy, run the
   tests, and open a pull request.

@@ -41,7 +41,7 @@ path = "src/colab_monitor/__init__.py"
 packages = ["src/colab_monitor"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src", "tests", "README.md", "CHANGELOG.md", "LICENSE"]
+include = ["src", "tests", "docs", "skills", "README.md", "CHANGELOG.md", "LICENSE"]
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.6", "playwright>=1.55", "pillow>=11"]
