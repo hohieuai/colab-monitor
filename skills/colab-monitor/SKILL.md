@@ -1,6 +1,6 @@
 ---
 name: colab-monitor
-description: Set up and use Colab Monitor, the local web dashboard for the `colab` CLI. Use when the user asks to set up, start, open, or stop a dashboard for their Colab sessions, asks how a Colab job is doing, how many compute units are left, or what is still running, or wants a job's live output. Also use whenever you run Colab jobs for the user, so their output shows up in the dashboard.
+description: Set up and use Colab Monitor, the local web dashboard for the `colab` CLI. Use when the user asks to set up, start, open, or stop a dashboard for their Colab sessions, asks how a Colab job is doing, how many compute units are left, or what is still running, or wants a job's live output. Also use whenever you run Colab jobs for the user, so their output shows up in the dashboard. Works alongside the colab-operator skill, which creates, runs, and stops the machines.
 ---
 
 # Skill: Colab Monitor
@@ -21,6 +21,30 @@ you. Running Colab jobs also needs the `colab` CLI itself (`uv tool install goog
 - You start Colab jobs for the user. Send their output to `~/colab-runs` so the dashboard shows it.
 - You are about to finish a task that used Colab. Check that nothing you started is idle or orphaned.
 
+## Works with the colab-operator skill
+
+The `colab` CLI ships the colab-operator skill. When both skills are loaded, split the work:
+
+- **colab-operator changes machines.** Use it to create, run code on, sync files with, and stop
+  Colab machines.
+- **colab-monitor watches them.** Use it to set up the dashboard and to read compute units, machine
+  statuses, logs, and history.
+
+Follow these shared conventions, or the dashboard shows the wrong picture:
+
+- **Name every session** with `-s NAME`, as colab-operator requires, and write its output to
+  `~/colab-runs/NAME.log`.
+- **Use the same sign-in.** The setup block below picks `--auth adc` when the user has Application
+  Default Credentials and no `colab` OAuth token, which matches how colab-operator signs in. If the
+  user's `colab` commands pass `--auth`, pass the same value to `colab-monitor`.
+- **Pass on isolated state files.** colab-operator isolates agent runs with
+  `colab --config FILE`. Colab Monitor reads only the state files it is given, so machines from
+  `FILE` would show as orphans. Start it with `--config ~/.config/colab-cli/sessions.json --config FILE`.
+  A dashboard that is already running reads only the files it started with: stop it, then start it
+  again with every file.
+- **Stop what you start.** colab-operator says to run `colab stop -s NAME` when you finish. Use the
+  status table in **Check on jobs** to confirm that nothing you started is still `idle`.
+
 ## Mental model (read this first)
 
 - **One local server, two readers.** The user opens `http://localhost:26522`. You read JSON from
@@ -39,7 +63,8 @@ you. Running Colab jobs also needs the `colab` CLI itself (`uv tool install goog
 
 ## Sign-in (the thing that blocks agents)
 
-- Colab Monitor reuses the `colab` CLI's sign-in. `--auth adc` matches `colab --auth=adc`.
+- Colab Monitor reuses the `colab` CLI's sign-in: the OAuth token in `~/.config/colab-cli/token.json`
+  with `--auth oauth2`, or Application Default Credentials with `--auth adc`.
 - If the CLI isn't signed in, the start fails within a second with `Couldn't sign in to Colab`. You
   can't sign in for the user: it opens a browser and waits for a pasted code. Ask the user to run
   `colab sessions` in their terminal (in Claude Code they can type `! colab sessions`), then run the
@@ -57,8 +82,11 @@ Run this block as written. It is safe to run again: it reuses a dashboard that i
 command -v colab-monitor >/dev/null || uv tool install git+https://github.com/hohieuai/colab-monitor
 mkdir -p ~/colab-runs
 API=http://127.0.0.1:26522 URL=http://localhost:26522 OUT="${TMPDIR:-/tmp}/colab-monitor.log"
+AUTH=oauth2  # same sign-in as the colab CLI: ADC when there is no colab OAuth token
+if [ ! -f ~/.config/colab-cli/token.json ] && { [ -n "${GOOGLE_APPLICATION_CREDENTIALS:-}" ] \
+    || [ -f ~/.config/gcloud/application_default_credentials.json ]; }; then AUTH=adc; fi
 if ! curl -sf "$API/api/state" >/dev/null; then
-  nohup colab-monitor --log-dir ~/colab-runs < /dev/null > "$OUT" 2>&1 &
+  nohup colab-monitor --auth "$AUTH" --log-dir ~/colab-runs < /dev/null > "$OUT" 2>&1 &
   for _ in $(seq 1 40); do curl -sf "$API/api/state" >/dev/null && break; sleep 0.5; done
 fi
 if curl -sf "$API/api/state" >/dev/null; then
@@ -73,6 +101,8 @@ fi
   that the dashboard keeps running until they ask you to stop it.
 - If it prints the server's output instead, find the message in **Recovery**.
 - `< /dev/null` matters: without it, a missing sign-in can wait forever for a code.
+- If you isolate runs with `colab --config FILE`, add
+  `--config ~/.config/colab-cli/sessions.json --config FILE` to the `nohup colab-monitor` line.
 - Keep the default `--host 127.0.0.1`. Any other address serves the user's logs to their network.
 
 ### Run jobs so they appear in the dashboard
@@ -137,6 +167,7 @@ kill $(lsof -t -iTCP:26522 -sTCP:LISTEN)
 | `Couldn't sign in to Colab` | Ask the user to run `colab sessions`, then run the setup block again. Or start with `--no-api`. |
 | `Port 26522 is used by another program` | Add `--port 26523` to the start command and use port 26523 in every URL. |
 | `curl` can't connect | The dashboard isn't running. Run the setup block. |
+| Your own machines show as `orphan` | You started them with `colab --config FILE`. Stop the dashboard and start it again with `--config ~/.config/colab-cli/sessions.json --config FILE`. |
 | A job is missing from the **Logs** page | Its output isn't in a `.log`, `.out`, or `.err` file directly inside `~/colab-runs`. Redirect it there. |
 | A machine is `orphan` and the user approves releasing it | `uvx --from google-colab-cli python -c "from colab_cli.common import state; state.client.unassign('ENDPOINT')"`, using the machine's `endpoint`. Then confirm with `colab sessions`. |
 

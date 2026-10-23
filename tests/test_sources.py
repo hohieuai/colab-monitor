@@ -342,3 +342,32 @@ class TestFreshMachine:
         monkeypatch.setenv("HOME", str(tmp_path))
         assert sources.local_sessions() == []
         assert not (tmp_path / ".config").exists()  # read-only: never create the CLI's folders
+
+
+class TestSeveralStateFiles:
+    """Agents isolate runs with `colab --config FILE`; the dashboard must read those files too."""
+
+    def test_merges_sessions_from_every_file(self, tmp_path):
+        a, b = tmp_path / "default.json", tmp_path / "agent.json"
+        _write_sessions(a, {"main": _session("main", "e1")})
+        _write_sessions(b, {"job": _session("job", "e2", running="run(train.py)")})
+        names = sorted(s["name"] for s in sources.local_sessions([str(a), str(b)]))
+        assert names == ["job", "main"]
+
+    def test_same_machine_in_two_files_is_listed_once(self, tmp_path):
+        a, b = tmp_path / "a.json", tmp_path / "b.json"
+        _write_sessions(a, {"job": _session("job", "e1")})
+        _write_sessions(b, {"job-copy": _session("job-copy", "e1")})
+        assert [s["name"] for s in sources.local_sessions([str(a), str(b)])] == ["job"]
+
+    def test_missing_files_are_skipped(self, tmp_path):
+        a = tmp_path / "a.json"
+        _write_sessions(a, {"main": _session("main", "e1")})
+        assert [s["name"] for s in sources.local_sessions([str(tmp_path / "nope.json"), str(a)])] == ["main"]
+
+    def test_isolated_agent_session_is_not_an_orphan(self, tmp_path):
+        a, b = tmp_path / "default.json", tmp_path / "agent.json"
+        _write_sessions(a, {})
+        _write_sessions(b, {"job": _session("job", "e2")})
+        merged = sources.merge_sessions(sources.local_sessions([str(a), str(b)]), [{"endpoint": "e2"}])
+        assert merged[0]["status"] == "idle"
