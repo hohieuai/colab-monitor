@@ -71,8 +71,12 @@ To stop the dashboard, press Ctrl-C in its terminal.
 To see a job on the **Logs** page, write its output to a file in `~/colab-runs`:
 
 ```bash
-colab run --gpu T4 -s train train.py > ~/colab-runs/train.log 2>&1
+colab run --timeout 86400 --gpu T4 -s train train.py > ~/colab-runs/train.log 2>&1
 ```
+
+Pass a `--timeout` longer than the job. With the default of 30 seconds, the `colab` CLI keeps
+working after the job passes 30 seconds, but its client then uses a full CPU core on your computer
+until the job ends.
 
 The file appears on the **Logs** page within three seconds, and new lines stream in while the job
 runs. The page shows files that end in `.log`, `.out`, or `.err`. To read a different folder, start
