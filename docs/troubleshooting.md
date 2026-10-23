@@ -108,22 +108,6 @@ colab-monitor --stall-alert 60
 `watch` needs a terminal and exits with status 2 without one. In a script, use
 `colab-monitor status`, or `colab-monitor status --json` for output that a program reads.
 
-## Quiet the fan while Colab jobs run
-
-If your computer's fan speeds up while `colab run` or `colab exec` jobs run, the cause is the
-`colab` CLI, not the dashboard. Both commands default to `--timeout 30`. Once a job runs longer than
-30 seconds, the CLI's local client checks for output in a loop that never waits, and uses a full CPU
-core until the job ends. Activity Monitor shows one `python3` process near 100% CPU for each job.
-
-Pass a timeout longer than the job when you start it:
-
-```bash
-colab run --timeout 86400 --gpu T4 -s train train.py > ~/colab-runs/train.log 2>&1
-```
-
-The job runs the same way, and its client stays near 0% CPU. The option takes effect only when a
-job starts, so a job that already runs keeps its client busy until it ends.
-
 ## Understand an empty chart or a gap in the chart
 
 The chart draws a line after the second successful Colab check, which takes one interval. It has

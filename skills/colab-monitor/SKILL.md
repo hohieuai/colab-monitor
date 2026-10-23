@@ -131,9 +131,9 @@ fi
   metrics as `loss=0.25`. Then the report shows the job's progress, time left, and loss.
 - Do the same for `colab exec`:
   `colab exec --timeout 86400 -s train -f step.py > ~/colab-runs/train-step.log 2>&1`.
-- Always pass `--timeout 86400` (or any value longer than the job) to `colab run` and `colab exec`.
-  With the default of 30 seconds, the CLI's local client spins at 100% of a CPU core once the job
-  passes 30 seconds, until it ends. Five such jobs keep a laptop's fans at full speed.
+- Always pass `--timeout 86400`, or any value longer than the job, to `colab run` and `colab exec`.
+  With the default of 30 seconds, the CLI's local client keeps a CPU core busy for the rest of a
+  longer job.
 - The file appears on the **Logs** page within 3 seconds and streams while the job runs.
 
 ### Check on jobs
