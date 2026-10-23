@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: sets-up-dashboard
+expected_outcome: |
+  Colab Monitor is installed if needed, started in the background without blocking or hanging on sign-in, exactly one copy listens on port 26522, and the user is told to open http://localhost:26522 and where to send job output.

@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: isolated-config-orphan
+expected_outcome: |
+  The agent explains that the dashboard reads only the state files it was started with, so a machine recorded in /tmp/agent-runs.json looks like an orphan although it is not, and restarts Colab Monitor with --config for both the default file and /tmp/agent-runs.json, without releasing the machine.

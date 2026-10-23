@@ -12,7 +12,9 @@ Set up a local dashboard for the user's Colab sessions in one step: the user wat
 
 If `command -v colab-monitor` finds nothing, install it with
 `uv tool install git+https://github.com/hohieuai/colab-monitor`. The setup block below does this for
-you. Running Colab jobs also needs the `colab` CLI itself (`uv tool install google-colab-cli`).
+you, and it reinstalls the latest version when the installed copy is too old for this skill (one
+that can't take `--config` more than once). Running Colab jobs also needs the `colab` CLI itself
+(`uv tool install google-colab-cli`).
 
 ## When to activate
 
@@ -42,6 +44,9 @@ Follow these shared conventions, or the dashboard shows the wrong picture:
   `FILE` would show as orphans. Start it with `--config ~/.config/colab-cli/sessions.json --config FILE`.
   A dashboard that is already running reads only the files it started with: stop it, then start it
   again with every file.
+- **Keep isolated state files somewhere durable**, such as `~/.config/colab-cli/agent.json`, rather
+  than `/tmp`. If a reboot clears `/tmp` while the machine still runs, nothing records it any more,
+  and it really is an orphan.
 - **Stop what you start.** colab-operator says to run `colab stop -s NAME` when you finish. Use the
   status table in **Check on jobs** to confirm that nothing you started is still `idle`.
 
@@ -80,6 +85,9 @@ Run this block as written. It is safe to run again: it reuses a dashboard that i
 
 ```bash
 command -v colab-monitor >/dev/null || uv tool install git+https://github.com/hohieuai/colab-monitor
+# An older install can't take --config more than once; reinstall the latest if so.
+colab-monitor --help | tr -s ' \n' ' ' | grep -q "repeatable to match" \
+  || uv tool install --reinstall git+https://github.com/hohieuai/colab-monitor
 mkdir -p ~/colab-runs
 API=http://127.0.0.1:26522 URL=http://localhost:26522 OUT="${TMPDIR:-/tmp}/colab-monitor.log"
 AUTH=oauth2  # same sign-in as the colab CLI: ADC when there is no colab OAuth token
@@ -167,6 +175,7 @@ kill $(lsof -t -iTCP:26522 -sTCP:LISTEN)
 | `Couldn't sign in to Colab` | Ask the user to run `colab sessions`, then run the setup block again. Or start with `--no-api`. |
 | `Port 26522 is used by another program` | Add `--port 26523` to the start command and use port 26523 in every URL. |
 | `curl` can't connect | The dashboard isn't running. Run the setup block. |
+| `colab-monitor: error: unrecognized arguments` | The installed copy is older than this skill. Run `uv tool install --reinstall git+https://github.com/hohieuai/colab-monitor`, then the setup block. |
 | Your own machines show as `orphan` | You started them with `colab --config FILE`. Stop the dashboard and start it again with `--config ~/.config/colab-cli/sessions.json --config FILE`. |
 | A job is missing from the **Logs** page | Its output isn't in a `.log`, `.out`, or `.err` file directly inside `~/colab-runs`. Redirect it there. |
 | A machine is `orphan` and the user approves releasing it | `uvx --from google-colab-cli python -c "from colab_cli.common import state; state.client.unassign('ENDPOINT')"`, using the machine's `endpoint`. Then confirm with `colab sessions`. |
