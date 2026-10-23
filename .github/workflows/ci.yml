@@ -51,7 +51,7 @@ jobs:
       - run: uv build
       - name: Install the wheel into a clean environment and smoke-test it
         run: scripts/smoke_test.sh dist/*.whl
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
