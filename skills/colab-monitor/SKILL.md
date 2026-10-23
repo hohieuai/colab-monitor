@@ -1,73 +1,90 @@
 ---
 name: colab-monitor
-description: Run and query Colab Monitor, the local dashboard for Colab sessions started with the `colab` CLI. Use when asked to watch a Colab job, check compute units or the usage rate, find idle or orphaned machines that still bill, tail a job's log while it runs, or report on recent Colab sessions. Reads a local JSON API, so it adds no requests to Colab.
+description: Set up and use Colab Monitor, the local web dashboard for the `colab` CLI. Use when the user asks to set up, start, open, or stop a dashboard for their Colab sessions, asks how a Colab job is doing, how many compute units are left, or what is still running, or wants a job's live output. Also use whenever you run Colab jobs for the user, so their output shows up in the dashboard.
 ---
 
-# Colab Monitor
+# Skill: Colab Monitor
 
-Colab Monitor is a local web server that combines the `colab` CLI's local state, your job logs, and
-two cached Colab requests per interval. People use its web page. You use its JSON API on
-`http://127.0.0.1:26522`.
+Set up a local dashboard for the user's Colab sessions in one step: the user watches
+`http://localhost:26522` in a browser, and you read the same data from its JSON API.
 
-It is read-only. It never starts, stops, or connects to a Colab machine. To act on a machine, use
-the `colab` CLI.
+## Installation
 
-## When to use this skill
+If `command -v colab-monitor` finds nothing, install it with
+`uv tool install git+https://github.com/hohieuai/colab-monitor`. The setup block below does this for
+you. Running Colab jobs also needs the `colab` CLI itself (`uv tool install google-colab-cli`).
 
-- The user asks how a Colab job is doing, or wants its latest output.
-- The user asks how many compute units are left, or how fast they are being used.
-- You need to check that no machine is idle or orphaned before you finish a task.
-- The user wants a summary of recent Colab sessions.
+## When to activate
 
-## Install and check the version
+- The user asks to set up, start, open, or stop Colab Monitor, or "a dashboard for my Colab jobs".
+- The user asks how a Colab job is doing, how many compute units are left, or what is still running.
+- You start Colab jobs for the user. Send their output to `~/colab-runs` so the dashboard shows it.
+- You are about to finish a task that used Colab. Check that nothing you started is idle or orphaned.
+
+## Mental model (read this first)
+
+- **One local server, two readers.** The user opens `http://localhost:26522`. You read JSON from
+  `http://127.0.0.1:26522/api/...`. Both show the same data.
+- **Read-only.** Colab Monitor never starts, stops, or connects to a machine. Act on machines with
+  the `colab` CLI, for example `colab stop -s NAME`.
+- **It runs until stopped.** Always start it in the background. It keeps running after your command
+  returns, which is what the user wants: the page stays available.
+- **Gentle on Colab.** One background loop asks Colab for compute units and machines once per
+  interval (60 seconds by default), however often you or the user read the page. Reading the API is
+  free, but its Colab data changes only once per interval.
+- **Logs are files.** The **Logs** page shows `.log`, `.out`, and `.err` files directly inside
+  `~/colab-runs`. Output you don't redirect there is invisible to the user.
+- **One copy per port.** The default port is 26522 ("COLAB" on a phone keypad). Starting a second
+  copy prints `Colab Monitor is already running at http://localhost:26522/` and exits with status 0.
+
+## Sign-in (the thing that blocks agents)
+
+- Colab Monitor reuses the `colab` CLI's sign-in. `--auth adc` matches `colab --auth=adc`.
+- If the CLI isn't signed in, the start fails within a second with `Couldn't sign in to Colab`. You
+  can't sign in for the user: it opens a browser and waits for a pasted code. Ask the user to run
+  `colab sessions` in their terminal (in Claude Code they can type `! colab sessions`), then run the
+  setup block again.
+- If the user can't sign in now, start with `--no-api`. The **Logs** and **History** pages still
+  work, but there are no compute units or machine statuses.
+
+## Workflow
+
+### Set up and open the dashboard
+
+Run this block as written. It is safe to run again: it reuses a dashboard that is already running.
 
 ```bash
-uv tool install git+https://github.com/hohieuai/colab-monitor
-colab-monitor --version
-```
-
-The dashboard reuses the `colab` CLI's sign-in. If the CLI has never signed in, a person must run
-`colab sessions` once in a terminal, because sign-in opens a browser and waits for a pasted code.
-You can't complete it from a non-interactive shell.
-
-## Start the dashboard without blocking your shell
-
-Check whether it already runs:
-
-```bash
-curl -sf http://127.0.0.1:26522/api/state >/dev/null && echo running || echo stopped
-```
-
-If it is stopped, start it in the background, save its process ID, and wait until it answers:
-
-```bash
+command -v colab-monitor >/dev/null || uv tool install git+https://github.com/hohieuai/colab-monitor
 mkdir -p ~/colab-runs
-nohup colab-monitor --log-dir ~/colab-runs > "${TMPDIR:-/tmp}/colab-monitor.log" 2>&1 &
-echo $! > "${TMPDIR:-/tmp}/colab-monitor.pid"
-for _ in $(seq 1 40); do curl -sf http://127.0.0.1:26522/api/state >/dev/null && break; sleep 0.5; done
-curl -sf http://127.0.0.1:26522/api/state >/dev/null && echo ready || cat "${TMPDIR:-/tmp}/colab-monitor.log"
+API=http://127.0.0.1:26522 URL=http://localhost:26522 OUT="${TMPDIR:-/tmp}/colab-monitor.log"
+if ! curl -sf "$API/api/state" >/dev/null; then
+  nohup colab-monitor --log-dir ~/colab-runs < /dev/null > "$OUT" 2>&1 &
+  for _ in $(seq 1 40); do curl -sf "$API/api/state" >/dev/null && break; sleep 0.5; done
+fi
+if curl -sf "$API/api/state" >/dev/null; then
+  echo "Colab Monitor is running at $URL"
+  (open "$URL" || xdg-open "$URL") >/dev/null 2>&1 || true
+else
+  cat "$OUT"
+fi
 ```
 
-- Never start `colab-monitor` in the foreground. It serves until it is stopped, so your shell would
-  hang.
-- If the log says `Couldn't sign in to Colab`, ask the user to run `colab sessions`, or restart with
-  `--no-api` to read local files only.
-- If the log says `Colab Monitor is already running`, another copy serves the port. Use it.
-- Keep the default `--host 127.0.0.1`. Any other address serves the user's logs to the network.
+- If it prints `Colab Monitor is running at http://localhost:26522`, tell the user that address and
+  that the dashboard keeps running until they ask you to stop it.
+- If it prints the server's output instead, find the message in **Recovery**.
+- `< /dev/null` matters: without it, a missing sign-in can wait forever for a code.
+- Keep the default `--host 127.0.0.1`. Any other address serves the user's logs to their network.
 
-## Send job output where the dashboard reads it
+### Run jobs so they appear in the dashboard
 
-Redirect each job's output to a file in `~/colab-runs`. Run long jobs in the background:
+- Redirect every job's output to `~/colab-runs`, named after the session:
+  `nohup colab run --gpu T4 -s train train.py > ~/colab-runs/train.log 2>&1 &`.
+- Do the same for `colab exec`: `colab exec -s train -f step.py > ~/colab-runs/train-step.log 2>&1`.
+- The file appears on the **Logs** page within 3 seconds and streams while the job runs.
 
-```bash
-nohup colab run --gpu T4 -s train train.py > ~/colab-runs/train.log 2>&1 &
-```
+### Check on jobs
 
-The dashboard shows `.log`, `.out`, and `.err` files that sit directly in `~/colab-runs`.
-
-## Read the state
-
-`/api/state` returns everything at once. This summary prints the account and one line per machine:
+This prints the compute units and one line per machine:
 
 ```bash
 curl -s http://127.0.0.1:26522/api/state | python3 -c '
@@ -82,67 +99,46 @@ for m in s["sessions"]:
 '
 ```
 
-Act on each status like this:
-
 | `status` | Meaning | What to do |
 |---|---|---|
 | `busy` | The CLI is running a command in the machine. | Wait, or read its log. |
-| `idle` | The machine runs and bills, but nothing runs in it. | If the work is done, stop it with `colab stop -s NAME`. |
+| `idle` | The machine runs and bills, but nothing runs in it. | If its work is done, stop it with `colab stop -s NAME`. |
 | `stopping` | The CLI stopped it, and the last Colab check still listed it. | Nothing. It disappears after the next check. |
-| `orphan` | The machine bills, but the CLI has no record of it. | Tell the user. Release it only with their approval, as shown in Recovery. |
-| `gone` | The CLI has a record, but Colab no longer lists the machine. | Nothing. The CLI prunes the record on its next run. |
-| `unknown` | Colab has not been checked yet. | Wait one interval and read again. |
+| `orphan` | The machine bills, but the CLI has no record of it. | Tell the user. Release it only with their approval (see **Recovery**). |
+| `gone` | The CLI has a record, but Colab no longer lists the machine. | Nothing. |
+| `unknown` | Colab hasn't been checked yet. | Wait one interval and check again. |
 
-When `api.error` is not null, the numbers come from the last successful check at `api.updated_at`.
-Report them as stale.
+- When `api.error` is set, the numbers come from the last good check at `api.updated_at`. Say so.
+- To read a job's output, `tail ~/colab-runs/NAME.log` is enough. `/api/log?path=...&lines=N`
+  returns the same lines with terminal colour codes removed and progress bars collapsed.
+- `/api/history?session=NAME&limit=20` lists what the CLI recorded in a session, oldest first, with
+  errors. `/api/activity?limit=20` lists the latest events across all sessions, newest first.
 
-## Read a log or a session's history
+### Stop the dashboard
 
-You can read a log file directly with `tail`. The API returns the same lines with terminal colour
-codes removed and progress bars collapsed to their final state:
-
-```bash
-LOG=~/colab-runs/train.log
-curl -s "http://127.0.0.1:26522/api/log?lines=40&path=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "$LOG")" \
-  | python3 -c 'import json, sys; print("\n".join(json.load(sys.stdin)["lines"]))'
-```
-
-The path must be a file passed with `--log`, or a `.log`, `.out`, or `.err` file directly inside a
-`--log-dir` folder. Any other path returns `403`.
-
-For what the CLI recorded in a session, read its history. Events come oldest first:
+Only when the user asks:
 
 ```bash
-curl -s "http://127.0.0.1:26522/api/history?session=train&limit=20" | python3 -c '
-import json, sys
-for e in json.load(sys.stdin)["events"]:
-    print(e["timestamp"], e["type"], e.get("error") or "")
-'
+kill $(lsof -t -iTCP:26522 -sTCP:LISTEN)
 ```
-
-`/api/activity?limit=20` returns the latest events across all sessions, newest first.
-`/api/usage?range=24h` returns usage-rate and balance samples for `1h`, `24h`, `7d`, or `30d`.
 
 ## Safety
 
-- Read the API at most every few seconds. It answers from local files and a cache, but the
-  dashboard checks Colab only once per interval, 60 seconds by default, so faster reads show nothing
-  new.
-- Never edit files in `~/.config/colab-cli`. They belong to the `colab` CLI.
-- Before you finish a task that started Colab machines, read `/api/state` and confirm that no
-  machine you started is `idle` or `orphan`.
-- If you started the dashboard, stop it when the user no longer needs it:
-  `kill "$(cat "${TMPDIR:-/tmp}/colab-monitor.pid")"`.
+- **Never start `colab-monitor` in the foreground.** It serves until stopped, so your shell hangs.
+- **Never edit `~/.config/colab-cli`.** Those files belong to the `colab` CLI.
+- **Never release an orphan without the user's approval.** It may be someone else's running work.
+- **Before you finish a task that used Colab**, check the status table and stop idle machines that
+  you started. Idle and orphaned machines keep using compute units.
 
 ## Recovery
 
-| Problem | Fix |
+| Message or symptom | Fix |
 |---|---|
-| `curl` cannot connect | The dashboard is not running. Start it as shown above. |
-| `Port 26522 is used by another program` | Start it with `--port 26523` and use that port in every URL. |
-| `Couldn't sign in to Colab` | Ask the user to run `colab sessions`, or start with `--no-api`. |
-| A log file is missing from `/api/state` | Move the output into `~/colab-runs`, or restart with `--log FILE`. |
-| A machine is `orphan` | With the user's approval, release it, replacing `ENDPOINT` with the machine's `endpoint`: `uvx --from google-colab-cli python -c "from colab_cli.common import state; state.client.unassign('ENDPOINT')"`. Then confirm with `colab sessions`. |
+| `Couldn't sign in to Colab` | Ask the user to run `colab sessions`, then run the setup block again. Or start with `--no-api`. |
+| `Port 26522 is used by another program` | Add `--port 26523` to the start command and use port 26523 in every URL. |
+| `curl` can't connect | The dashboard isn't running. Run the setup block. |
+| A job is missing from the **Logs** page | Its output isn't in a `.log`, `.out`, or `.err` file directly inside `~/colab-runs`. Redirect it there. |
+| A machine is `orphan` and the user approves releasing it | `uvx --from google-colab-cli python -c "from colab_cli.common import state; state.client.unassign('ENDPOINT')"`, using the machine's `endpoint`. Then confirm with `colab sessions`. |
 
 More detail: [command-line reference](../../docs/command-line.md) and
 [how Colab Monitor works](../../docs/how-it-works.md).

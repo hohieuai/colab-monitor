@@ -8,8 +8,9 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
-- An agent skill, `skills/colab-monitor/SKILL.md`, that teaches AI coding agents to start Colab
-  Monitor in the background and read its API.
+- An agent skill, `skills/colab-monitor/SKILL.md`. Ask a coding agent to "set up Colab Monitor" and
+  it installs, starts, and opens the dashboard, sends the output of the Colab jobs it runs to the
+  **Logs** page, and checks for idle machines before it finishes.
 
 ## [0.1.0] - 2026-10-24
 

@@ -4,7 +4,7 @@
 
 # Colab Monitor
 
-A local web dashboard for the Colab sessions you run with the `colab` CLI.
+Monitor your Colab sessions, compute units, and job logs from one local dashboard.
 
 [![CI](https://github.com/hohieuai/colab-monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/hohieuai/colab-monitor/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
@@ -76,6 +76,23 @@ The file appears on the **Logs** page within three seconds, and new lines stream
 runs. The page shows files that end in `.log`, `.out`, or `.err`. To read a different folder, start
 Colab Monitor with `--log-dir`.
 
+## Use it with an AI agent
+
+Colab Monitor ships an [agent skill](skills/colab-monitor/SKILL.md). With the skill installed, ask
+your coding agent to "set up Colab Monitor". The agent installs and starts the dashboard and opens
+`http://localhost:26522` for you. When it runs Colab jobs for you, it writes their output where the
+**Logs** page shows it, and it checks for idle machines before it finishes.
+
+To install the skill for Claude Code, run:
+
+```bash
+mkdir -p ~/.claude/skills/colab-monitor
+curl -fsSL https://raw.githubusercontent.com/hohieuai/colab-monitor/main/skills/colab-monitor/SKILL.md \
+  -o ~/.claude/skills/colab-monitor/SKILL.md
+```
+
+For another agent, copy `skills/colab-monitor/SKILL.md` into that agent's skills folder.
+
 ## Documentation
 
 - The [command-line reference](docs/command-line.md) lists every option, the exit codes, the files
@@ -84,8 +101,6 @@ Colab Monitor with `--log-dir`.
   its requests to Colab, and how it protects your data.
 - [Troubleshooting](docs/troubleshooting.md) covers sign-in errors, port conflicts, missing logs,
   and orphaned machines.
-- The [agent skill](skills/colab-monitor/SKILL.md) teaches AI coding agents to start Colab Monitor
-  and read its API.
 - The [security policy](SECURITY.md) explains how to report a vulnerability.
 - The [contributing guide](CONTRIBUTING.md) explains how to set up a development copy, run the
   tests, and open a pull request.
