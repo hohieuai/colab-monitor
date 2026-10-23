@@ -36,7 +36,7 @@ All notable changes to this project are documented here. The format follows
   dashboard as before, so existing commands keep working.
 - The red orphan banner is now part of the **Needs attention** list, which keeps the command that
   releases an orphan.
-- A new icon: a gauge.
+- A new icon, `[*]`: the mark a notebook shows next to a cell that is running.
 - The agent skill reads `colab-monitor status --json` instead of calling the HTTP API.
 
 ## [0.1.0] - 2026-10-24
