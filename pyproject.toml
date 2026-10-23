@@ -28,7 +28,7 @@ Issues = "https://github.com/hohieuai/colab-monitor/issues"
 Changelog = "https://github.com/hohieuai/colab-monitor/blob/main/CHANGELOG.md"
 
 [project.scripts]
-colab-monitor = "colab_monitor.server:main"
+colab-monitor = "colab_monitor.cli:main"
 
 [build-system]
 requires = ["hatchling>=1.27"]

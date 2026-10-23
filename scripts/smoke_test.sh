@@ -29,4 +29,9 @@ for path in / /app.css /app.js /theme.js /favicon.svg /icon.svg /apple-touch-ico
   echo "ok   $path"
 done
 curl -sf "$base/api/state" | .venv/bin/python -c 'import json, sys; assert json.load(sys.stdin)["config"]["api_enabled"] is False'
+.venv/bin/colab-monitor status --port "$port" --json \
+  | .venv/bin/python -c 'import json, sys; r = json.load(sys.stdin); assert r["schema"] == 1 and r["source"] == "dashboard"'
+echo "ok   status (from the dashboard)"
+.venv/bin/colab-monitor status --no-api --usage-log "$work/usage.jsonl" --log-dir "$work" >/dev/null
+echo "ok   status (files only)"
 echo "Smoke test passed"

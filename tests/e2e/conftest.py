@@ -4,7 +4,9 @@ Run with `uv run pytest tests/e2e`. Uses the installed Chrome, or Playwright's o
 Chromium if that was installed with `uv run playwright install chromium`; skipped otherwise.
 """
 
+import os
 import threading
+import time
 
 import pytest
 
@@ -30,6 +32,17 @@ def data(tmp_path_factory):
 
 @pytest.fixture(scope="session")
 def site(data):
+    server, url = serve(sample_dashboard(data))
+    yield url
+    server.shutdown()
+
+
+@pytest.fixture(scope="session")
+def stalled_site(tmp_path_factory):
+    """The running job's log went quiet 20 minutes ago."""
+    data = build_data(tmp_path_factory.mktemp("stalled"))
+    quiet = time.time() - 20 * 60
+    os.utime(data["runs"] / "train-gpu.log", (quiet, quiet))
     server, url = serve(sample_dashboard(data))
     yield url
     server.shutdown()

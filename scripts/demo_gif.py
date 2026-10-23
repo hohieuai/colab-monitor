@@ -54,6 +54,19 @@ def write_jsonl(path: pathlib.Path, events: list[dict]) -> None:
     path.write_text("".join(json.dumps(e) + "\n" for e in events))
 
 
+def tqdm_line(done: int, total: int, seconds_each: int) -> str:
+    """One line of a tqdm progress bar, as a tokenizer would print it."""
+
+    def clock(seconds: int) -> str:
+        return f"{seconds // 60:02d}:{seconds % 60:02d}"
+
+    bar = "#" * (done * 10 // total)
+    return (
+        f"tokenize: {done * 100 // total:3d}%|{bar:<10}| {done}/{total} "
+        f"[{clock(done * seconds_each)}<{clock((total - done) * seconds_each)}, {seconds_each:.2f}s/shard]"
+    )
+
+
 def training_log(steps: int) -> str:
     lines = [
         "torch 2.5.1 | device: NVIDIA A100-SXM4-40GB",
@@ -151,10 +164,12 @@ def build(root: pathlib.Path) -> dict:
     (runs / "eval-sweep.log").write_text(
         "loading runs/llama3/ckpt-1200\naccuracy 0.871 | f1 0.864 | 2,000 examples\n"
     )
-    (runs / "data-prep.log").write_text("".join(f"tokenized shard {i:02d}/64\n" for i in range(1, 41)))
+    (runs / "data-prep.log").write_text("".join(tqdm_line(i, 64, 13) + "\n" for i in range(1, 41)))
 
     usage = UsageLog(str(root / "usage.jsonl"))
-    balance, t = START_BALANCE, NOW - 24 * HOUR
+    # Every 5 minutes from 2 minutes past the hour, so no sample lands on a machine's start time
+    # and each machine's rate can be told apart.
+    balance, t = START_BALANCE, NOW - 24 * HOUR + 120
     while t <= NOW:
         hours_ago = (NOW - t) / HOUR
         rate = sum(r for *_, r, started, _job in MACHINES if hours_ago <= started)
@@ -224,6 +239,12 @@ def main() -> None:
             page.wait_for_timeout(300)
             capture(page, 2000)
             page.mouse.move(*REST)
+
+            page.locator("#ov-jobs").scroll_into_view_if_needed()
+            page.mouse.wheel(0, 400)
+            page.wait_for_timeout(500)
+            capture(page, 2800)
+            page.evaluate("window.scrollTo(0, 0)")
 
             page.click('nav a[data-route="sessions"]')
             page.mouse.move(*REST)

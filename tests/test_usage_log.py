@@ -52,3 +52,17 @@ def test_downsample_keeps_order_endpoints_and_cap():
 def test_downsample_leaves_small_series_alone():
     points = [{"t": 1.0}, {"t": 2.0}]
     assert downsample(points, 100) == points
+
+
+def test_read_reuses_parsed_samples_until_the_file_changes(tmp_path, monkeypatch):
+    log = UsageLog(str(tmp_path / "usage.jsonl"))
+    log.append({"balance": 10.0, "rate_per_hour": 1.0}, now=100.0)
+    assert len(log.read()) == 1
+    opened = []
+    real_open = open
+    monkeypatch.setattr("builtins.open", lambda *a, **k: opened.append(a[0]) or real_open(*a, **k))
+    assert len(log.read(since=50.0)) == 1
+    assert opened == []  # served from the cache
+    monkeypatch.undo()
+    log.append({"balance": 9.0, "rate_per_hour": 1.0}, now=200.0)
+    assert [p["t"] for p in log.read()] == [100.0, 200.0]

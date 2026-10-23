@@ -54,6 +54,60 @@ An orphaned machine still uses compute units, and the CLI will not stop it.
 
 3. Run `colab sessions` to confirm that the machine is gone.
 
+## Fix "Not signed in to Colab" from status or watch
+
+`status` and `watch` use the sign-in that the `colab` CLI saved, and never start a sign-in
+themselves. Without a saved sign-in, they show local files only, with no balance or machines.
+
+1. Run `colab sessions` and complete the sign-in.
+2. Run `colab-monitor status` again.
+
+To read local files on purpose and hide the message, pass `--no-api`.
+
+## Make status show the files you passed
+
+If a dashboard runs, `status` and `watch` show the dashboard's data. When you pass an option that
+chooses files, such as `--config` or `--log-dir`, they read the files themselves instead. The `source` field of
+`colab-monitor status --json` is `dashboard` when the data came from the running dashboard.
+
+To read another dashboard, pass its port with `--port`.
+
+## Understand a machine rate marked with ≈ or shown as –
+
+Colab reports one usage rate for the whole account. A rate marked with `≈` is an estimate for one
+machine, worked out from the rise in the account's rate when the machine started. A `–` means that
+Colab Monitor could not tell the machines apart, for example because the dashboard was off when the
+machine started. [How Colab Monitor works](how-it-works.md#what-a-machine-costs) lists every case.
+
+To get estimates for the machines you start next, keep the dashboard running while they start.
+
+## Show a job's progress
+
+The **Jobs** card and `status` show progress when the log has one of these lines:
+
+- A tqdm bar, such as `45/100 [00:30<00:37, 1.5it/s]`.
+- A step counter, such as `step 900/1800`.
+- An epoch counter, such as `epoch 3/10`.
+
+Write metrics as `loss=0.25` or `accuracy: 0.91` to show them next to the progress.
+
+## Stop the stalled warning for a quiet job
+
+A job counts as stalled when its machine runs a command and its log has not changed for 15
+minutes. If a job prints rarely by design, stop the dashboard and start it again with a higher
+threshold:
+
+```bash
+colab-monitor --stall-alert 60
+```
+
+`status` and `watch` take the same option.
+
+## Use watch in a script
+
+`watch` needs a terminal and exits with status 2 without one. In a script, use
+`colab-monitor status`, or `colab-monitor status --json` for output that a program reads.
+
 ## Understand an empty chart or a gap in the chart
 
 The chart draws a line after the second successful Colab check, which takes one interval. It has

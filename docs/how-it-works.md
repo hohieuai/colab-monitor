@@ -1,8 +1,9 @@
 # How Colab Monitor works
 
 Colab Monitor answers three questions about the Colab machines on your account: what they cost,
-which ones still run, and what your jobs print. This page explains where each answer comes from and
-why the dashboard is built the way it is.
+which ones still run, and what your jobs print. The web dashboard and the `status` and `watch`
+commands give the same answers. This page explains where each answer comes from, how far you can
+trust it, and why the dashboard is built the way it is.
 
 ## Where the data comes from
 
@@ -13,6 +14,7 @@ The dashboard combines two local sources with one remote source.
  your jobs ── write ───▶ ~/colab-runs/*.log
                                 │  read on every page refresh
  Colab ◀── 2 requests per interval ── Colab Monitor on 127.0.0.1:26522 ◀── your browser
+                                                                        ◀── colab-monitor status
 ```
 
 The `colab` CLI keeps a state file with the sessions it started, and a history file for each
@@ -37,6 +39,85 @@ A machine's status comes from comparing Colab's list of machines with the CLI's 
 
 Without the **Stopping** status, every machine that you stop would show as an orphan for up to one
 interval, and the red notice would appear for no reason.
+
+## What you spent
+
+Colab reports only the current balance, not what you spent. Colab Monitor works spend out from the
+usage samples that it saves after every check. It adds up each drop in the balance between two
+samples. A rise, such as a top-up, is skipped instead of being subtracted.
+
+Spend therefore covers only the time that Colab Monitor was running. A gap in the samples hides what
+was spent during it, and the **Spending** card says when the oldest sample was taken. "Today" starts
+at local midnight.
+
+## How long your compute units last
+
+The runway is the balance divided by the current usage rate, and the time it runs out is now plus
+the runway. The rate changes whenever a machine starts or stops, so the runway is a forecast for the
+machines that run now, not for your plans. When nothing uses compute units, there is no runway.
+
+## What a machine costs
+
+Colab reports one usage rate for the whole account. When only one machine runs, that machine uses
+the whole rate, and the dashboard shows the rate without a mark.
+
+With several machines, Colab Monitor estimates each machine's rate and marks it with `≈`. It looks
+at the two usage samples around the time the machine started. The rise in the account's rate between
+them is the machine's rate. For example, if the rate went from 1.76 to 13.53 an hour while an A100
+started, the A100 uses about 11.77 an hour. One machine whose start was not seen, such as an orphan,
+gets what is left of the current rate.
+
+The estimate is left blank when it would be a guess:
+
+- No sample was taken within 15 minutes of the start, for example because the dashboard was off.
+- Two machines started between the same two samples, so the rise cannot be split.
+- Two or more machines have no estimate, so the rest of the rate cannot be split either.
+
+A machine's cost is its rate times its uptime, and its idle cost is its rate times its idle time.
+Both are estimates whenever the rate is.
+
+## How long a machine has run and idled
+
+Uptime counts from the `session_created` event in the CLI's history. Idle time counts from the end
+of the last command that the CLI ran in the machine, or from its start if it has run nothing. A
+machine that runs a command has no idle time. An orphan has no history, so its uptime is unknown.
+
+Machine hours add up, for each kind of hardware, the time each session ran in the last 7 days, from
+its start to its end or to now. Run counts come from the code runs in the CLI's history. A run fails
+when its output has an error.
+
+## What a job's log tells the dashboard
+
+Colab Monitor reads the last 200 lines of each log file:
+
+- **Progress** comes from the last progress line: a tqdm bar such as `45/100 [00:30<00:37, 1.5it/s]`,
+  or `step 900/1800`, or `epoch 3/10`. A tqdm bar also gives the time left and the speed. For a
+  `step` or `epoch` line, the time left comes from the steps left and the speed on the line.
+- **Metrics** are the latest numbers written as `name=value`, `name: value`, or a known name such as
+  `loss 0.25`. Counters like `step` and `epoch`, one-letter names, percentages, and lines with an
+  error are skipped. At most 8 metrics are kept.
+- **Last error** is the last line that contains `error`, `exception`, `traceback`, `failed`, or
+  `out of memory`.
+
+A log belongs to a machine when its name, without the extension, is the machine's session name or
+starts with it followed by `-`, `_`, or `.`. For example, `train-gpu.log` and `train-gpu-run2.log`
+belong to `train-gpu`. A job is **stalled** when its machine runs a command and the log has not
+changed for longer than the stall threshold. A stalled job often means a hung process, but a job
+that prints rarely, such as a long evaluation, looks the same.
+
+## When something needs attention
+
+The overview, `status`, and `watch` list the same items, critical ones first:
+
+| Item | Severity | When |
+|---|---|---|
+| Orphan | Critical | Colab lists a machine that the CLI has no record of. |
+| Runway | Critical | Compute units run out sooner than the runway threshold, 12 hours by default. |
+| Idle | Warning | A machine has been idle longer than the idle threshold, 30 minutes by default. |
+| Stalled | Warning | A running job's log has been silent longer than the stall threshold, 15 minutes by default. |
+| Failed | Warning | A run failed in the last hour. |
+
+The [command-line reference](command-line.md#alert-options) shows how to change the thresholds.
 
 ## Why requests to Colab are limited
 
@@ -79,5 +160,7 @@ protection.
 
 - The CLI writes a session's history when a command finishes, so a long `colab run` shows its live
   output only through a log file.
+- Per-machine rates, costs, and spend are worked out on your computer from Colab's account totals,
+  so they can differ from Colab's own billing by a few hundredths of a unit.
 - **Running** reflects only commands that the CLI runs. If you open a CLI session in the browser
   with `colab url` and run code there, the dashboard still shows the machine as **Idle**.

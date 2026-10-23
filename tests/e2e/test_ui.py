@@ -76,10 +76,63 @@ def test_overview_stats(page, site, data):
     )
 
 
-def test_orphan_banner_counts_orphans_not_stopping(page, site):
-    open_route(page, site, "overview")
-    assert page.is_visible("#orphan-alert")
-    assert page.inner_text("#orphan-title").startswith("2 orphaned machines")
+def test_attention_lists_orphans_and_failures(page, site):
+    open_route(page, site, "overview", "#attention-list li")
+    assert page.is_visible("#attention")
+    assert "critical" in page.get_attribute("#attention", "class")
+    items = page.locator("#attention-list li")
+    assert items.count() == 3
+    assert page.inner_text("#attention-title") == "3 things need attention"
+    kinds = [items.nth(i).get_attribute("data-kind") for i in range(3)]
+    assert kinds == ["orphan", "orphan", "failed"]  # critical first
+    assert "side-run is an orphan" in items.nth(0).inner_text()
+    assert "ValueError: bad split" in items.nth(2).inner_text()
+    assert page.is_visible("#orphan-hint") and "unassign" in page.inner_text("#orphan-hint")
+
+
+def test_stat_feet_show_spend_and_when_units_run_out(page, site):
+    open_route(page, site, "overview", "#s-balance:not(:empty)")
+    expect(page.locator("#s-rate-foot")).to_have_text(re.compile(r"^\d+\.\d\d spent today$"))
+    expect(page.locator("#s-runway-foot")).to_have_text(re.compile(r"^Runs out \w+"))
+
+
+def test_active_machines_show_uptime_idle_and_rate(page, site):
+    open_route(page, site, "overview", "#ov-sessions li .meta")
+    rows = page.locator("#ov-sessions li")
+    gpu = rows.filter(has_text="train-gpu")
+    assert "up 1 h" in gpu.inner_text() and "≈1.41 / hr" in gpu.inner_text()
+    assert "idle 16 min" in rows.filter(has_text="eval-cpu").inner_text()
+
+
+def test_jobs_card(page, site):
+    open_route(page, site, "overview", "#ov-jobs li")
+    job = page.locator('#ov-jobs li[data-job="train-gpu.log"]')
+    text = job.inner_text()
+    assert "60%" in text and "on train-gpu" in text and "loss 0.0198" in text
+    assert job.locator(".bar").get_attribute("aria-valuenow") == "60"
+    assert "schema mismatch in shard 40" in job.locator(".job-err").inner_text()
+    assert "No progress printed yet" in page.locator('#ov-jobs li[data-job="etl.err"]').inner_text()
+    job.locator(".job-name").click()
+    page.wait_for_selector("#page-logs:not([hidden])")
+    expect(page.locator('#log-list button[aria-current="true"] .pl-title')).to_have_text("train-gpu.log")
+
+
+def test_spending_card(page, site):
+    open_route(page, site, "overview", "#ov-spend dt")
+    labels = page.locator("#ov-spend dt").all_inner_texts()
+    assert labels[:3] == ["Today", "Last 7 days", "Last 30 days"]
+    values = dict(zip(labels, page.locator("#ov-spend dd").all_inner_texts(), strict=True))
+    assert re.fullmatch(r"\d+\.\d\d", values["Last 7 days"])
+    assert "T4 1.0" in values["Machine hours, 7 days"] and "CPU" in values["Machine hours, 7 days"]
+    assert values["Runs, 24 hours"] == "1 finished · 1 failed"
+
+
+def test_stalled_job_is_flagged(page, stalled_site):
+    open_route(page, stalled_site, "overview", "#ov-jobs li")
+    job = page.locator('#ov-jobs li[data-job="train-gpu.log"]')
+    expect(job.locator(".badge.warn")).to_have_text("Silent 20 min")
+    stalled = page.locator('#attention-list li[data-kind="stalled"]')
+    assert "train-gpu.log has printed nothing for 20 min while train-gpu runs" in stalled.inner_text()
 
 
 def test_active_machines_and_recent_activity(page, site):
@@ -170,6 +223,18 @@ def test_sessions_rows_statuses_and_script_name(page, site):
     assert "SECRET" not in page.content()
 
 
+def test_sessions_uptime_and_rate_columns(page, site):
+    open_route(page, site, "sessions", "#sessions-body tr")
+    headers = page.locator("#sessions-table th").all_inner_texts()
+    assert headers[3:5] == ["Uptime", "Rate"]
+    gpu = page.locator("#sessions-body tr", has_text="train-gpu")
+    cells = gpu.locator("td").all_inner_texts()
+    assert cells[3] == "1 h" and cells[4] == "≈1.41 / hr"
+    assert page.get_attribute('#sessions-body tr:has-text("eval-cpu") td[data-label="Uptime"]', "title") == (
+        "Idle for 16 min"
+    )
+
+
 @pytest.mark.parametrize(
     ("status", "count"), [("all", 5), ("busy", 1), ("idle", 1), ("orphan", 2), ("gone", 0)]
 )
@@ -219,7 +284,7 @@ def test_log_list_and_selection(page, site):
 
 
 def test_log_lines_are_clean_and_highlighted(page, site):
-    _open_log(page, site, "train.log")
+    _open_log(page, site, "train-gpu.log")
     text = page.inner_text("#log-view")
     assert "\x1b" not in text and "[0;31m" not in text
     assert "ValueError: schema mismatch" in text
@@ -231,7 +296,7 @@ def test_log_lines_are_clean_and_highlighted(page, site):
 
 
 def test_log_filter(page, site):
-    _open_log(page, site, "train.log")
+    _open_log(page, site, "train-gpu.log")
     page.fill("#log-filter", "epoch 3")
     assert page.locator("#log-view .tl").count() == 20
     assert page.locator("#log-view mark").count() == 20
@@ -241,7 +306,7 @@ def test_log_filter(page, site):
 
 
 def test_follow_toggle(page, site):
-    _open_log(page, site, "train.log")
+    _open_log(page, site, "train-gpu.log")
     at_bottom = "(() => { const v = document.getElementById('log-view'); return v.scrollTop + v.clientHeight >= v.scrollHeight - 10; })()"
     assert page.evaluate(at_bottom)
     page.click("label.switch")
@@ -261,13 +326,13 @@ def test_new_log_lines_appear_live(page, site, data):
 
 
 def test_copy_and_download(page, site):
-    _open_log(page, site, "train.log")
+    _open_log(page, site, "train-gpu.log")
     page.click("#log-copy")
     page.wait_for_timeout(200)
     assert "Tesla T4" in page.evaluate("navigator.clipboard.readText()")
     with page.expect_download() as download:
         page.click("#log-download")
-    assert download.value.suggested_filename == "train.log"
+    assert download.value.suggested_filename == "train-gpu.log"
 
 
 # ---------- History ----------
@@ -456,7 +521,7 @@ def test_monospace_text_has_no_ligatures(page, site):
     def features(selector):
         return page.evaluate(f"getComputedStyle(document.querySelector('{selector}')).fontFeatureSettings")
 
-    _open_log(page, site, "train.log")
+    _open_log(page, site, "train-gpu.log")
     assert '"calt" 0' in features("#log-view .tl"), features("#log-view .tl")
     open_route(page, site, "sessions", "#sessions-body tr")
     for selector in ("#page-sessions .tag", "#page-sessions td.name .ep"):
@@ -475,9 +540,9 @@ def _at_bottom(page):
 
 
 def test_follow_stays_pinned_as_lines_arrive(page, site, data):
-    _open_log(page, site, "train.log")
+    _open_log(page, site, "train-gpu.log")
     page.wait_for_timeout(1500)  # let fonts settle; taller lines must not unpin the view
-    with open(data["runs"] / "train.log", "a") as f:
+    with open(data["runs"] / "train-gpu.log", "a") as f:
         f.writelines(f"[epoch 7] step {i}/100 loss 0.01\n" for i in range(30))
     expect(page.locator("#log-view")).to_contain_text("[epoch 7] step 29/100", timeout=8000)
     page.wait_for_timeout(200)
@@ -486,7 +551,7 @@ def test_follow_stays_pinned_as_lines_arrive(page, site, data):
 
 
 def test_scrolling_up_turns_follow_off(page, site):
-    _open_log(page, site, "train.log")
+    _open_log(page, site, "train-gpu.log")
     page.hover("#log-view")
     page.mouse.wheel(0, -2000)
     page.wait_for_timeout(300)
@@ -508,7 +573,7 @@ def test_log_list_order_is_stable(page, site, data):
     open_route(page, site, "logs", "#log-list button")
     before = page.locator("#log-list .pl-title").all_inner_texts()
     assert before == sorted(before, key=str.lower)
-    with open(data["runs"] / "train.log", "a") as f:  # newest activity must not move it to the top
+    with open(data["runs"] / "train-gpu.log", "a") as f:  # newest activity must not move it to the top
         f.write("one more line\n")
     page.wait_for_timeout(3500)
     assert page.locator("#log-list .pl-title").all_inner_texts() == before

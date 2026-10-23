@@ -252,17 +252,22 @@ h2 { font-size: 15px; font-weight: 600; margin: 0; letter-spacing: -0.005em; }
 .link { color: var(--link); text-decoration: none; font-size: 13px; font-weight: 500; }
 .link:hover { text-decoration: underline; }
 
-/* ---------- Alert ---------- */
-.alert {
-  display: flex; gap: 12px; align-items: flex-start;
-  border: 1px solid color-mix(in srgb, var(--red) 30%, transparent);
-  background: var(--red-bg); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 20px;
+/* ---------- Needs attention ---------- */
+.attention {
+  border: 1px solid color-mix(in srgb, var(--amber) 30%, transparent);
+  background: var(--amber-bg); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 20px;
 }
-.alert > svg { color: var(--red); flex: none; margin-top: 2px; }
-.alert > div { min-width: 0; }
-.alert-title { font-weight: 600; }
-.alert-body { color: var(--text-2); font-size: 13px; margin-top: 2px; }
-.alert code { display: block; margin-top: 6px; font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+.attention.critical { border-color: color-mix(in srgb, var(--red) 30%, transparent); background: var(--red-bg); }
+.attention-head { display: flex; align-items: center; gap: 10px; }
+.attention-head svg { color: var(--amber); flex: none; }
+.attention.critical .attention-head svg { color: var(--red); }
+.attention-head h2 { font-size: 14px; font-weight: 600; margin: 0; letter-spacing: 0; }
+.attention-list { list-style: none; margin: 6px 0 0; padding: 0 0 0 26px; }
+.attention-list li { display: flex; gap: 10px; align-items: baseline; font-size: 13.5px; padding: 3px 0; overflow-wrap: anywhere; }
+.attention-list .sev { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--amber); transform: translateY(-2px); }
+.attention-list .sev.critical { background: var(--red); }
+.attention-hint { margin: 8px 0 0 26px; font-size: 13px; color: var(--text-2); }
+.attention-hint code { display: block; margin-top: 6px; font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
 
 /* ---------- Cards & stats ---------- */
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-sm); min-width: 0; }
@@ -388,6 +393,27 @@ td.job { max-width: 220px; font: 12.5px var(--mono); color: var(--text-2); }
 .ev-icon.bad { color: var(--red); background: var(--red-bg); border-color: transparent; }
 .ev-icon.run { color: var(--text); background: var(--surface-2); }
 .time { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.rate { font-size: 12.5px; color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.small { font-size: 12.5px; }
+
+/* ---------- Jobs and spending ---------- */
+.jobs li { align-items: flex-start; }
+.job-top { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.job-top .title { flex: 1; min-width: 0; }
+.job-name { color: inherit; text-decoration: none; }
+.job-name:hover { text-decoration: underline; }
+.job-pct { font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bar { height: 4px; border-radius: 2px; background: var(--active); margin-top: 8px; overflow: hidden; }
+.bar > span { display: block; height: 100%; border-radius: inherit; background: var(--text); }
+.badge { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 500; white-space: nowrap; }
+.badge.warn { background: var(--amber-bg); color: var(--amber); }
+.job-err { margin-top: 6px; font: 12px var(--mono); color: var(--red); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.figures { display: grid; grid-template-columns: minmax(0, 1fr) auto; margin: 0; padding: 4px 0; }
+.figures dt, .figures dd { margin: 0; padding: 10px 20px; border-top: 1px solid var(--border); }
+.figures dt:first-of-type, .figures dt:first-of-type + dd { border-top: 0; }
+.figures dt { color: var(--text-2); white-space: nowrap; }
+.figures dd { text-align: right; font-weight: 500; font-variant-numeric: tabular-nums; }
+.figures dd .faint { font-weight: 400; }
 
 /* ---------- Two-pane (logs, history) ---------- */
 .pane { display: grid; grid-template-columns: 260px minmax(0, 1fr); height: calc(100vh - 210px); min-height: 460px; overflow: hidden; }
@@ -495,7 +521,7 @@ footer.foot { margin-top: 40px; font-size: 12px; color: var(--muted); display: f
 /* Monospaced text is shown exactly as written: Geist Mono's ligatures would turn "==" into one
    glyph and merge runs like "###". Last in the file, and :is() lifts every selector to the
    specificity of `td.name .ep`, so rules like `details pre { font: ... }` can't undo it. */
-:is(.mono, code, pre, .tag, .term-body, .term-file, .term-status, td.job, td.name .ep, .endpoint, .kv .v, .tli-err) {
+:is(.mono, code, pre, .tag, .term-body, .term-file, .term-status, td.job, td.name .ep, .endpoint, .kv .v, .tli-err, .job-err) {
   font-variant-ligatures: none;
   font-feature-settings: "liga" 0, "calt" 0;
 }
