@@ -1,0 +1,39 @@
+name: Bug report
+description: Something in Colab Monitor doesn't work as expected
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what you saw instead. Screenshots help.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start with `colab-monitor --log-dir ~/colab-runs`
+        2. Run `colab run ... > ~/colab-runs/job.log`
+        3. Open the Logs page
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `colab-monitor --version` and `colab version`
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: OS and browser
+      placeholder: macOS 15, Chrome 141
+  - type: textarea
+    id: logs
+    attributes:
+      label: Terminal output
+      description: Anything `colab-monitor` printed. Remove tokens or other private data first.
+      render: text

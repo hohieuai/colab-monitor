@@ -1,0 +1,256 @@
+import json
+import threading
+import urllib.error
+import urllib.request
+
+import pytest
+
+from colab_monitor.poller import ApiPoller
+from colab_monitor.server import Dashboard, make_server
+
+
+@pytest.fixture
+def dashboard(tmp_path):
+    sessions = tmp_path / "sessions.json"
+    sessions.write_text(
+        json.dumps(
+            {
+                "job": {
+                    "name": "job",
+                    "token": "SECRET-TOKEN",
+                    "url": "https://proxy.example/secret",
+                    "endpoint": "e1",
+                    "accelerator": "T4",
+                    "running": "run(train.py)",
+                }
+            }
+        )
+    )
+    history = tmp_path / "history"
+    history.mkdir()
+    (history / "job.jsonl").write_text(
+        json.dumps({"timestamp": "t0", "event_type": "session_created"}) + "\n"
+    )
+    runs = tmp_path / "runs"
+    runs.mkdir()
+    (runs / "train.log").write_text("epoch 1 loss 0.5\n")
+    (tmp_path / "secret.log").write_text("private\n")
+
+    poller = ApiPoller(
+        fetch_usage=lambda: {"balance": 199.7, "rate_per_hour": 1.8},
+        fetch_assignments=lambda: [
+            {"endpoint": "e1", "accelerator": "T4"},
+            {"endpoint": "e2", "accelerator": "A100"},
+        ],
+        interval=60,
+    )
+    poller.poll_once()
+    return Dashboard(
+        poller=poller,
+        sessions_path=str(sessions),
+        history_dir=str(history),
+        log_files=[],
+        log_dirs=[str(runs)],
+    ), tmp_path
+
+
+def test_state_merges_server_and_local(dashboard):
+    app, _ = dashboard
+    status, body = app.handle("/api/state", {})
+    assert status == 200
+    by_endpoint = {s["endpoint"]: s for s in body["sessions"]}
+    assert by_endpoint["e1"]["status"] == "busy"
+    assert by_endpoint["e2"]["status"] == "orphan"
+    assert body["api"]["usage"]["balance"] == 199.7
+    assert [entry["name"] for entry in body["logs"]] == ["train.log"]
+    assert body["history"] == ["job"]
+    assert "SECRET-TOKEN" not in json.dumps(body)
+
+
+def test_log_endpoint_only_serves_configured_logs(dashboard):
+    app, tmp_path = dashboard
+    status, body = app.handle("/api/log", {"path": str(tmp_path / "runs/train.log")})
+    assert status == 200
+    assert body["lines"] == ["epoch 1 loss 0.5"]
+
+    status, _ = app.handle("/api/log", {"path": str(tmp_path / "secret.log")})
+    assert status == 403
+
+
+def test_history_endpoint(dashboard):
+    app, _ = dashboard
+    status, body = app.handle("/api/history", {"session": "job"})
+    assert status == 200
+    assert body["events"][0]["type"] == "session_created"
+
+    status, _ = app.handle("/api/history", {"session": "../sessions"})
+    assert status == 400
+
+
+def test_unknown_route_is_404(dashboard):
+    app, _ = dashboard
+    status, _ = app.handle("/api/nope", {})
+    assert status == 404
+
+
+def test_real_http_server_serves_page_and_json(dashboard):
+    app, _ = dashboard
+    server = make_server(app, "127.0.0.1", 0)
+    port = server.server_address[1]
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/") as resp:
+            assert resp.status == 200
+            assert "text/html" in resp.headers["Content-Type"]
+            assert b"<title>" in resp.read()
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/state") as resp:
+            assert json.loads(resp.read())["api"]["usage"]["balance"] == 199.7
+        with pytest.raises(urllib.error.HTTPError) as err:
+            urllib.request.urlopen(f"http://127.0.0.1:{port}/api/nope")
+        assert err.value.code == 404
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_rejects_foreign_host_header_on_loopback(dashboard):
+    import http.client
+
+    app, _ = dashboard
+    server = make_server(app, "127.0.0.1", 0)
+    port = server.server_address[1]
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port)
+        conn.request("GET", "/api/state", headers={"Host": "evil.example:80"})
+        assert conn.getresponse().status == 403
+        conn.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_state_exposes_config(dashboard):
+    app, _ = dashboard
+    _, body = app.handle("/api/state", {})
+    config = body["config"]
+    assert config["api_enabled"] is True
+    assert config["interval"] == 60
+    assert config["log_dirs"] and config["history_dir"]
+
+
+def test_usage_endpoint_filters_by_range(dashboard, tmp_path):
+    import time
+
+    from colab_monitor.usage_log import UsageLog
+
+    app, _ = dashboard
+    log = UsageLog(str(tmp_path / "usage.jsonl"))
+    now = time.time()
+    log.append({"balance": 10.0, "rate_per_hour": 1.0}, now=now - 3 * 86400)
+    log.append({"balance": 9.0, "rate_per_hour": 2.0}, now=now - 600)
+    app.usage_log = log
+
+    status, body = app.handle("/api/usage", {"range": "24h"})
+    assert status == 200
+    assert [p["balance"] for p in body["points"]] == [9.0]
+
+    status, body = app.handle("/api/usage", {"range": "7d"})
+    assert [p["balance"] for p in body["points"]] == [10.0, 9.0]
+
+    status, _ = app.handle("/api/usage", {"range": "1y"})
+    assert status == 400
+
+
+def test_usage_endpoint_without_log_is_empty(dashboard):
+    app, _ = dashboard
+    status, body = app.handle("/api/usage", {"range": "24h"})
+    assert status == 200
+    assert body["points"] == []
+
+
+def test_activity_endpoint(dashboard):
+    app, _ = dashboard
+    status, body = app.handle("/api/activity", {"limit": "5"})
+    assert status == 200
+    assert body["events"][0]["session"] == "job"
+
+
+def test_serves_icons_and_nothing_else_from_static(dashboard):
+    app, _ = dashboard
+    server = make_server(app, "127.0.0.1", 0)
+    port = server.server_address[1]
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{port}"
+    try:
+        for path, ctype in [
+            ("/icon.svg", "image/svg+xml"),
+            ("/favicon.svg", "image/svg+xml"),
+            ("/apple-touch-icon.png", "image/png"),
+            ("/app.css", "text/css; charset=utf-8"),
+            ("/app.js", "text/javascript; charset=utf-8"),
+            ("/theme.js", "text/javascript; charset=utf-8"),
+            ("/fonts/Geist-Variable.woff2", "font/woff2"),
+            ("/fonts/GeistMono-Variable.woff2", "font/woff2"),
+        ]:
+            with urllib.request.urlopen(base + path) as resp:
+                assert resp.status == 200
+                assert resp.headers["Content-Type"] == ctype
+                assert resp.read()
+        for path in (
+            "/static/index.html",
+            "/../server.py",
+            "/server.py",
+            "/fonts/OFL.txt",
+            "/fonts/../app.js",
+        ):
+            with pytest.raises(urllib.error.HTTPError) as err:
+                urllib.request.urlopen(base + path)
+            assert err.value.code == 404
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_state_marks_recently_stopped_machine_as_stopping(dashboard, tmp_path):
+    app, _ = dashboard
+    (tmp_path / "history" / "gone.jsonl").write_text(
+        json.dumps({"timestamp": "t0", "event_type": "session_created", "endpoint": "e2"})
+        + "\n"
+        + json.dumps({"timestamp": "t1", "event_type": "session_terminated"})
+        + "\n"
+    )
+    _, body = app.handle("/api/state", {})
+    by_endpoint = {s["endpoint"]: s for s in body["sessions"]}
+    assert by_endpoint["e2"]["status"] == "stopping"
+    assert by_endpoint["e2"]["name"] == "gone"
+
+
+def test_security_headers(dashboard):
+    app, _ = dashboard
+    server = make_server(app, "127.0.0.1", 0)
+    port = server.server_address[1]
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/") as resp:
+            csp = resp.headers["Content-Security-Policy"]
+            assert "default-src 'self'" in csp
+            assert (
+                "script-src 'self'" in csp and "unsafe-inline" not in csp.split("script-src")[1].split(";")[0]
+            )
+            assert "frame-ancestors 'none'" in csp
+            assert resp.headers["X-Content-Type-Options"] == "nosniff"
+            assert resp.headers["Referrer-Policy"] == "no-referrer"
+            assert resp.headers["Cache-Control"] == "no-store"
+            html = resp.read().decode()
+            assert "<script>" not in html  # no inline scripts, so the policy can forbid them
+            assert "googleapis" not in html
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/fonts/Geist-Variable.woff2") as resp:
+            assert "max-age" in resp.headers["Cache-Control"]
+    finally:
+        server.shutdown()
+        server.server_close()
