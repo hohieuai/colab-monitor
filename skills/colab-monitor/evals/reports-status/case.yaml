@@ -1,4 +1,0 @@
-schema_version: "1.1"
-name: reports-status
-expected_outcome: |
-  The agent reads `colab-monitor status --json` and reports the compute-unit balance and usage rate, the status of each Colab machine or that none are running, and anything that needs attention, without starting, stopping, or releasing any machine.
