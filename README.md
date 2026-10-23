@@ -107,7 +107,8 @@ For another agent, copy `skills/colab-monitor/SKILL.md` into that agent's skills
 
 ## License
 
-Colab Monitor is licensed under the [Apache License 2.0](LICENSE). The bundled Geist fonts use the
+Copyright 2026 hohieuai. Colab Monitor is licensed under the [Apache License 2.0](LICENSE). See
+[NOTICE](NOTICE) for attributions. The bundled Geist fonts use the
 [SIL Open Font License](src/colab_monitor/static/fonts/OFL.txt).
 
 Colab Monitor is an unofficial community project and is not affiliated with Colab.

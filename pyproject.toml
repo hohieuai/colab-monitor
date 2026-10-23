@@ -4,8 +4,8 @@ dynamic = ["version"]
 description = "A local web dashboard for watching the Colab sessions you run with the colab CLI."
 readme = "README.md"
 license = "Apache-2.0"
-license-files = ["LICENSE", "src/colab_monitor/static/fonts/OFL.txt"]
-authors = [{ name = "Duc Hieu Ho" }]
+license-files = ["LICENSE", "NOTICE", "src/colab_monitor/static/fonts/OFL.txt"]
+authors = [{ name = "hohieuai" }]
 requires-python = ">=3.12"
 dependencies = ["google-colab-cli>=0.7.5"]
 keywords = ["colab", "dashboard", "monitoring", "gpu", "jupyter", "machine-learning"]
@@ -41,7 +41,7 @@ path = "src/colab_monitor/__init__.py"
 packages = ["src/colab_monitor"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src", "tests", "docs", "skills", "README.md", "CHANGELOG.md", "LICENSE"]
+include = ["src", "tests", "docs", "skills", "README.md", "CHANGELOG.md", "LICENSE", "NOTICE"]
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.6", "playwright>=1.55", "pillow>=11"]
