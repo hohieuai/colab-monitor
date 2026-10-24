@@ -131,16 +131,41 @@ class TestLogs:
         assert names == ["a.log", "b.out", "train.log"]
         assert all(entry["exists"] for entry in logs)
 
-    def test_allowed_only_for_configured_paths(self, tmp_path):
+    def test_resolves_only_configured_paths(self, tmp_path):
         logdir = tmp_path / "runs"
         logdir.mkdir()
         (logdir / "a.log").write_text("a\n")
         secret = tmp_path / "secret.log"
         secret.write_text("no\n")
 
-        assert sources.is_allowed_log(str(logdir / "a.log"), [], [str(logdir)])
-        assert not sources.is_allowed_log(str(secret), [], [str(logdir)])
-        assert not sources.is_allowed_log(str(logdir / ".." / "secret.log"), [], [str(logdir)])
+        assert sources.resolve_log(str(logdir / "a.log"), [], [str(logdir)]) == str(
+            (logdir / "a.log").resolve()
+        )
+        assert sources.resolve_log(str(secret), [], [str(logdir)]) is None
+        assert sources.resolve_log(str(logdir / ".." / "secret.log"), [], [str(logdir)]) is None
+        assert sources.resolve_log(str(secret), [str(secret)], []) == str(secret.resolve())
+
+    def test_a_path_the_os_cannot_hold_is_refused(self, tmp_path):
+        assert sources.resolve_log(str(tmp_path / "a.log\x00"), [], [str(tmp_path)]) is None
+
+    def test_resolves_to_the_file_it_checked(self, tmp_path, monkeypatch):
+        logdir = tmp_path / "runs"
+        logdir.mkdir()
+        (logdir / "a.log").write_text("a\n")
+        monkeypatch.setenv("HOME", str(tmp_path))
+        real = str((logdir / "a.log").resolve())
+        assert sources.resolve_log("~/runs/a.log", [], [str(logdir)]) == real
+        assert sources.resolve_log(str(logdir / "a.log") + "/", [], [str(logdir)]) == real
+
+    def test_symlinks_that_leave_the_folder_are_not_listed(self, tmp_path):
+        logdir = tmp_path / "runs"
+        logdir.mkdir()
+        (logdir / "a.log").write_text("a\n")
+        (tmp_path / "secret.log").write_text("no\n")
+        (logdir / "link-in.log").symlink_to("a.log")
+        (logdir / "link-out.log").symlink_to("../secret.log")
+        names = sorted(e["name"] for e in sources.discover_logs([], [str(logdir)]))
+        assert names == ["a.log", "link-in.log"]
 
 
 class TestHistory:

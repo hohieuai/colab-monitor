@@ -68,7 +68,7 @@ Measure a report against what Colab Monitor promises:
 - Access tokens and runtime URLs from the CLI's session file never reach the page. The server
   removes them first.
 - `/api/log` serves only the files passed with `--log`, and `.log`, `.out`, and `.err` files
-  directly inside a `--log-dir` folder. The server resolves each path before it checks it. Other
+  directly inside a `--log-dir` folder. The server resolves each path, including symlinks, checks the result, and reads that same file. Other
   files come from a fixed list.
 - The page loads nothing from other sites. Its Content Security Policy blocks inline scripts and
   scripts from other origins, and the page inserts log and history text as text, never as HTML.
