@@ -103,6 +103,7 @@ helps, such as `feat(logs): add a line filter`. Mark a breaking change with `!`,
 
 Keep pull requests focused, describe what changed and how you tested it, and include before/after
 screenshots for UI changes. By contributing you agree that your contribution is licensed under the
-project's [Apache 2.0 license](LICENSE).
+project's [Apache 2.0 license](LICENSE). Copyright notices name "The Colab Monitor Authors". To be
+listed, add yourself to [AUTHORS](AUTHORS) in your pull request.
 
 Please follow the [Code of Conduct](CODE_OF_CONDUCT.md).
