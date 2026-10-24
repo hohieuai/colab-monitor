@@ -23,6 +23,12 @@ uv run colab-monitor --no-api --open   # runs without a Colab account, local fil
 To see every state without a Colab account, run the browser tests: they start a dashboard with
 fixture data (running, idle, stopping and orphaned machines, logs, history and a usage chart).
 
+To skip the local setup, open the repository in its dev container, with **Dev Containers: Reopen in
+Container** in VS Code or in GitHub Codespaces. The container has Python 3.13, uv, the locked
+dependencies, and Chromium for the browser tests, and it forwards the dashboard's port 26522.
+
+Coding agents follow [AGENTS.md](AGENTS.md), which summarizes these steps and the project's rules.
+
 ## Checks
 
 Run these before opening a pull request. CI runs the same commands.
