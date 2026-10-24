@@ -47,6 +47,9 @@ check of what `/api/log` serves. It takes about 20 seconds and must print `pass`
 uv run python verification/log_access/check.py
 ```
 
+[verification/log_access/README.md](verification/log_access/README.md) explains what the check
+covers, how to tell a real bug from an outdated check, and how to update it.
+
 Write the test first, watch it fail, then make it pass. Every bug fix needs a test that would have
 caught it.
 
