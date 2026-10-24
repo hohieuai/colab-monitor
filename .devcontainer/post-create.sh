@@ -6,6 +6,6 @@ set -euo pipefail
 # This project doesn't use Yarn.
 sudo rm -f /etc/apt/sources.list.d/yarn.list
 
-pipx install uv
+pipx install uv==0.13.5
 uv sync --locked
 uv run playwright install --with-deps chromium
