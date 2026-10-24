@@ -24,6 +24,8 @@ meant to catch. Fix the check before you trust a pass.
 At the sync commit, all four properties pass and `--mutants` prints `caught` three times. Any
 `FAIL` is new.
 
+CI runs the first command on every pull request, on Linux and macOS.
+
 ## What the check covers
 
 The check calls the real `Dashboard.handle`; it does not model the code. It builds one directory
