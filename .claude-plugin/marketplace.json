@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "colab-monitor",
+  "description": "The Colab Monitor agent skill, for setting up and using Colab Monitor with the colab CLI.",
+  "owner": {
+    "name": "The Colab Monitor Authors"
+  },
+  "plugins": [
+    {
+      "name": "colab-monitor",
+      "description": "Set up and use Colab Monitor, the local dashboard and terminal monitor for Colab sessions run with the colab CLI.",
+      "source": "./",
+      "category": "development"
+    }
+  ]
+}
