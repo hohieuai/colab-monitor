@@ -41,6 +41,14 @@ All notable changes to this project are documented here. The format follows
 - Every `colab run` and `colab exec` example, and the agent skill, pass `--timeout 86400`, so the
   CLI waits for long jobs without keeping a CPU core busy.
 
+### Fixed
+
+- `/api/log` reads the same resolved file that it checked, so paths such as `~/colab-runs/a.log` or
+  `a.log/` return the file's lines instead of an empty answer.
+- A path with a NUL byte gets a 403 answer instead of no answer and a traceback.
+- The **Logs** page no longer lists a symlink that leads out of the log folder, which it could not
+  open.
+
 ## [0.1.0] - 2026-10-24
 
 First release.

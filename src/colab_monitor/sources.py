@@ -156,6 +156,7 @@ def _log_entry(path: str) -> dict:
 
 def discover_logs(files: Iterable[str], dirs: Iterable[str]) -> list[dict]:
     """Explicit log files plus *.log/*.out/*.err directly inside log dirs."""
+    dirs = list(dirs)
     paths = [os.path.abspath(os.path.expanduser(p)) for p in files]
     for d in dirs:
         d = os.path.abspath(os.path.expanduser(d))
@@ -163,7 +164,11 @@ def discover_logs(files: Iterable[str], dirs: Iterable[str]) -> list[dict]:
             names = os.listdir(d)
         except OSError:
             continue
-        paths.extend(os.path.join(d, n) for n in names if n.endswith(LOG_SUFFIXES))
+        for name in names:
+            path = os.path.join(d, name)
+            # List only what /api/log serves, so a symlink that leads out of the folder is left out.
+            if name.endswith(LOG_SUFFIXES) and resolve_log(path, [], dirs):
+                paths.append(path)
 
     seen = set()
     entries = []
@@ -175,15 +180,23 @@ def discover_logs(files: Iterable[str], dirs: Iterable[str]) -> list[dict]:
     return entries
 
 
-def is_allowed_log(path: str, files: Iterable[str], dirs: Iterable[str]) -> bool:
-    """Only configured files, or log files directly inside configured dirs."""
-    real = os.path.realpath(os.path.expanduser(path))
-    if real in {os.path.realpath(os.path.expanduser(f)) for f in files}:
-        return True
-    if not real.endswith(LOG_SUFFIXES):
-        return False
-    parent = os.path.dirname(real)
-    return parent in {os.path.realpath(os.path.expanduser(d)) for d in dirs}
+def resolve_log(path: str, files: Iterable[str], dirs: Iterable[str]) -> str | None:
+    """The real path to read for `path`, or None unless it is a configured log file.
+
+    A configured file is one passed with --log, or a .log/.out/.err file directly inside a --log-dir
+    folder, judged by where symlinks lead. Callers read the returned path, so the file checked is the
+    file read.
+    """
+    try:
+        real = os.path.realpath(os.path.expanduser(path))
+        if real in {os.path.realpath(os.path.expanduser(f)) for f in files}:
+            return real
+        if not real.endswith(LOG_SUFFIXES):
+            return None
+        dirs_real = {os.path.realpath(os.path.expanduser(d)) for d in dirs}
+    except ValueError:  # a path the OS can't hold, such as one with a NUL byte
+        return None
+    return real if os.path.dirname(real) in dirs_real else None
 
 
 def history_names(history_dir: str = DEFAULT_HISTORY_DIR) -> list[str]:

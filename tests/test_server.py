@@ -317,3 +317,19 @@ class TestInsightsApi:
         )
         _, body = app.handle("/api/state", {})
         assert body["insights"]["thresholds"] == {"idle_minutes": 10, "stall_minutes": 3, "runway_hours": 6}
+
+
+def test_log_api_reads_the_checked_file_and_refuses_bad_paths(tmp_path, monkeypatch):
+    runs = tmp_path / "runs"
+    runs.mkdir()
+    (runs / "train.log").write_text("epoch 1\n")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    app = Dashboard(
+        None, sessions_path=str(tmp_path / "none.json"), history_dir=str(tmp_path), log_dirs=[str(runs)]
+    )
+    assert app.handle("/api/log", {"path": "~/runs/train.log"}) == (
+        200,
+        {"path": "~/runs/train.log", "lines": ["epoch 1"]},
+    )
+    assert app.handle("/api/log", {"path": str(runs / "train.log") + "/"})[1]["lines"] == ["epoch 1"]
+    assert app.handle("/api/log", {"path": str(runs / "train.log\x00")})[0] == 403

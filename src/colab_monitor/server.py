@@ -159,10 +159,11 @@ class Dashboard:
         path = query.get("path")
         if not path:
             return 400, {"error": "missing path"}
-        if not sources.is_allowed_log(path, self.log_files, self.log_dirs):
+        real = sources.resolve_log(path, self.log_files, self.log_dirs)
+        if real is None:
             return 403, {"error": "not a configured log file"}
         lines = _clamp_int(query.get("lines"), 300, 1, 5000)
-        return 200, {"path": path, "lines": sources.tail_lines(path, max_lines=lines)}
+        return 200, {"path": path, "lines": sources.tail_lines(real, max_lines=lines)}
 
     def _history(self, query: dict) -> tuple[int, dict]:
         name = query.get("session", "")
