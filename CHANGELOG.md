@@ -8,6 +8,8 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- The agent skill installs as a Claude Code plugin:
+  `/plugin install colab-monitor --marketplace hohieuai/colab-monitor`.
 - `colab-monitor status` prints what runs, what it costs, how jobs are doing, and what needs
   attention, then exits. `--json` prints the same report as JSON (schema 1), and `--exit-code`
   exits with status 3 when something needs attention.

@@ -1,0 +1,13 @@
+{
+  "name": "colab-monitor",
+  "version": "0.1.0",
+  "description": "Set up and use Colab Monitor, the local dashboard and terminal monitor for Colab sessions run with the colab CLI.",
+  "author": {
+    "name": "The Colab Monitor Authors",
+    "url": "https://github.com/hohieuai/colab-monitor/blob/main/AUTHORS"
+  },
+  "homepage": "https://github.com/hohieuai/colab-monitor",
+  "repository": "https://github.com/hohieuai/colab-monitor",
+  "license": "Apache-2.0",
+  "keywords": ["colab", "monitoring", "dashboard", "compute-units", "jupyter"]
+}

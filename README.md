@@ -123,15 +123,21 @@ your coding agent to "set up Colab Monitor". The agent installs and starts the d
 **Logs** page shows it, and it runs `colab-monitor status` to report progress and to check for idle
 machines before it finishes.
 
-To install the skill for Claude Code, run:
+To install the skill in Claude Code, run this command in a Claude Code session:
 
-```bash
-mkdir -p ~/.claude/skills/colab-monitor
-curl -fsSL https://raw.githubusercontent.com/hohieuai/colab-monitor/main/skills/colab-monitor/SKILL.md \
-  -o ~/.claude/skills/colab-monitor/SKILL.md
+```text
+/plugin install colab-monitor --marketplace hohieuai/colab-monitor
 ```
 
-For another agent, copy `skills/colab-monitor/SKILL.md` into that agent's skills folder.
+On Claude Code versions before 2.1.275, add the marketplace first, then install the plugin:
+
+```text
+/plugin marketplace add hohieuai/colab-monitor
+/plugin install colab-monitor@colab-monitor
+```
+
+`claude plugin update colab-monitor` installs newer versions. For another agent, copy
+`skills/colab-monitor/SKILL.md` into that agent's skills folder.
 
 ## Documentation
 
