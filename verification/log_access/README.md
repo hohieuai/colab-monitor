@@ -66,17 +66,16 @@ The check does not cover:
 | `src/colab_monitor/sources.py` | `resolve_log`, `discover_logs`, `_log_entry`, `tail_lines`, `LOG_SUFFIXES` |
 | `src/colab_monitor/server.py` | `Dashboard.handle` for `/api/log` and `/api/state` (the `logs` list), `Dashboard._log` |
 
-**Sync commit:** `d9818dd`. At this commit, the check was confirmed to describe the code above.
+**Sync commit:** `a8c6cd4`. At this commit, the check was confirmed to describe the code above.
 
-To see whether covered code changed since the sync commit, run:
+To list the commits since then that changed covered code, run:
 
 ```bash
-git diff d9818dd -- src/colab_monitor/sources.py src/colab_monitor/server.py \
-  | grep -nE "^[-+].*(resolve_log|discover_logs|_log_entry|tail_lines|LOG_SUFFIXES|def _log|/api/log)"
+verification/log_access/covered_changes.sh a8c6cd4
 ```
 
-Any output means that a covered line changed. Read the whole function around it, because a change
-inside a function body does not always repeat the function's name.
+No output means that the covered code is unchanged. The script follows changes inside each
+function's body with `git log -L`, which a search of the diff for the function's name can miss.
 
 Move the sync commit forward only after you read the changed code, confirm that the tree, the
 labels, and the four properties still describe it, and run the check at the new commit.
