@@ -498,3 +498,90 @@ class TestReviewFindings:
         text = cli.render(_minimal_report(jobs=[job]), width=120, color=True)
         assert "\x1b]" not in text and "\x1bc" not in text and "\x07" not in text
         assert "boom" in text
+
+
+class TestSignIn:
+    """status and watch sign in with saved credentials only, and never prompt."""
+
+    @pytest.fixture(autouse=True)
+    def no_prompt(self, monkeypatch, tmp_path):
+        def refuse(*args):
+            raise AssertionError("signing in must never prompt")
+
+        monkeypatch.setattr("builtins.input", refuse)
+        monkeypatch.setenv("HOME", str(tmp_path))
+
+    @staticmethod
+    def _token(tmp_path, text='{"token": "t", "refresh_token": "r"}'):
+        path = tmp_path / ".config" / "colab-cli" / "token.json"
+        path.parent.mkdir(parents=True)
+        path.write_text(text)
+        return path
+
+    @staticmethod
+    def _args():
+        return type("Args", (), {"auth": "oauth2"})()
+
+    def test_no_saved_sign_in_shows_local_files(self, capsys):
+        assert cli._connect(self._args(), usage_log=None) is None
+        err = capsys.readouterr().err
+        assert "Not signed in" in err and "colab sessions" in err
+
+    def test_a_valid_saved_token_is_used(self, tmp_path, monkeypatch):
+        from google.oauth2 import credentials
+
+        self._token(tmp_path)
+        creds = type("Creds", (), {"valid": True})()
+        monkeypatch.setattr(credentials.Credentials, "from_authorized_user_file", lambda path, scopes: creds)
+        made = {}
+        monkeypatch.setattr(
+            "google.auth.transport.requests.AuthorizedSession", lambda c: made.setdefault("creds", c)
+        )
+        cli._quiet_session("oauth2")
+        assert made["creds"] is creds
+
+    def test_a_token_that_cannot_refresh_falls_back(self, tmp_path, monkeypatch, capsys):
+        from google.auth.exceptions import RefreshError
+        from google.oauth2 import credentials
+
+        self._token(tmp_path)
+
+        class Expired:
+            valid = False
+
+            def refresh(self, request):
+                raise RefreshError("invalid_grant: Token has been expired or revoked.")
+
+        monkeypatch.setattr(
+            credentials.Credentials, "from_authorized_user_file", lambda path, scopes: Expired()
+        )
+        assert cli._connect(self._args(), usage_log=None) is None
+        err = capsys.readouterr().err
+        assert "Couldn't sign in to Colab" in err and "expired or revoked" in err
+
+    def test_a_corrupt_token_file_falls_back(self, tmp_path, capsys):
+        self._token(tmp_path, text="{not json")
+        assert cli._connect(self._args(), usage_log=None) is None
+        assert "Couldn't sign in to Colab" in capsys.readouterr().err
+
+    def test_adc_without_credentials_falls_back(self, monkeypatch):
+        import google.auth
+        from google.auth.exceptions import DefaultCredentialsError
+
+        def missing(scopes):
+            raise DefaultCredentialsError("no ADC")
+
+        monkeypatch.setattr(google.auth, "default", missing)
+        assert cli._quiet_session("adc") is None
+
+    def test_adc_credentials_are_used(self, monkeypatch):
+        import google.auth
+
+        creds = type("Creds", (), {"valid": True})()
+        monkeypatch.setattr(google.auth, "default", lambda scopes: (creds, "project"))
+        made = {}
+        monkeypatch.setattr(
+            "google.auth.transport.requests.AuthorizedSession", lambda c: made.setdefault("creds", c)
+        )
+        cli._quiet_session("adc")
+        assert made["creds"] is creds
