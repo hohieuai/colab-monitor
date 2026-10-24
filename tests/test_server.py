@@ -2,11 +2,14 @@ import json
 import threading
 import urllib.error
 import urllib.request
+from types import SimpleNamespace
 
 import pytest
 
+from colab_monitor import server
 from colab_monitor.poller import ApiPoller
 from colab_monitor.server import Dashboard, make_server
+from colab_monitor.usage_log import UsageLog
 
 
 @pytest.fixture
@@ -333,3 +336,108 @@ def test_log_api_reads_the_checked_file_and_refuses_bad_paths(tmp_path, monkeypa
     )
     assert app.handle("/api/log", {"path": str(runs / "train.log") + "/"})[1]["lines"] == ["epoch 1"]
     assert app.handle("/api/log", {"path": str(runs / "train.log\x00")})[0] == 403
+
+
+class TestColabAdapter:
+    def _client(self):
+        def enum(name):
+            return SimpleNamespace(name=name)
+
+        assignment = SimpleNamespace(
+            endpoint="gpu-t4-abc",
+            accelerator=enum("T4"),
+            variant=enum("GPU"),
+            machine_shape=enum("STANDARD"),
+            runtime_proxy_info=SimpleNamespace(token="SECRET-TOKEN", url="https://proxy/secret"),
+        )
+        info = SimpleNamespace(
+            paid_compute_units_balance=12.5, consumption_rate_hourly=1.76, assignments_count=1
+        )
+        return SimpleNamespace(get_consumption_user_info=lambda: info, list_assignments=lambda: [assignment])
+
+    def test_usage_fields(self):
+        usage, _ = server._colab_fetchers(self._client())
+        assert usage() == {"balance": 12.5, "rate_per_hour": 1.76, "assignments_count": 1}
+
+    def test_assignments_drop_the_vm_token(self):
+        _, assignments = server._colab_fetchers(self._client())
+        result = assignments()
+        assert result == [
+            {"endpoint": "gpu-t4-abc", "accelerator": "T4", "variant": "GPU", "machine_shape": "STANDARD"}
+        ]
+        assert "SECRET" not in json.dumps(result)
+
+
+class TestSmallHelpers:
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [(None, 7), ("abc", 7), ("3", 3), ("-5", 1), ("99999", 10)],
+    )
+    def test_clamp_int(self, value, expected):
+        assert server._clamp_int(value, 7, 1, 10) == expected
+
+    @pytest.mark.parametrize(
+        ("host", "expected"),
+        [
+            ("127.0.0.1", True),
+            ("::1", True),
+            ("localhost", True),
+            ("0.0.0.0", False),
+            ("192.168.1.4", False),
+            ("evil.example", False),
+        ],
+    )
+    def test_is_loopback(self, host, expected):
+        assert server._is_loopback(host) is expected
+
+
+@pytest.fixture
+def app(tmp_path):
+    history = tmp_path / "history"
+    history.mkdir()
+    runs = tmp_path / "runs"
+    runs.mkdir()
+    poller = ApiPoller(lambda: {"balance": 1.0, "rate_per_hour": 0.0}, list, interval=60)
+    poller.poll_once()
+    return server.Dashboard(
+        poller, sessions_path=str(tmp_path / "sessions.json"), history_dir=str(history), log_dirs=[str(runs)]
+    )
+
+
+class TestEndpointLimits:
+    def test_chart_points_are_capped(self, app, tmp_path):
+        import time
+
+        log = UsageLog(str(tmp_path / "usage.jsonl"))
+        now = time.time()
+        for i in range(2000):
+            log.append({"balance": 100 - i * 0.01, "rate_per_hour": 1.0}, now=now - 3600 + i)
+        app.usage_log = log
+        _, body = app.handle("/api/usage", {"range": "1h"})
+        assert len(body["points"]) <= server.MAX_CHART_POINTS
+        assert body["points"][-1]["balance"] == pytest.approx(100 - 1999 * 0.01)
+
+    def test_log_lines_param_is_clamped(self, app, tmp_path):
+        path = tmp_path / "runs" / "big.log"
+        path.write_text("".join(f"{i}\n" for i in range(10)))
+        _, body = app.handle("/api/log", {"path": str(path), "lines": "0"})
+        assert body["lines"] == ["9"]
+        _, body = app.handle("/api/log", {"path": str(path), "lines": "nonsense"})
+        assert len(body["lines"]) == 10
+
+    def test_log_without_path_is_400(self, app):
+        status, _ = app.handle("/api/log", {})
+        assert status == 400
+
+    def test_history_limit_is_clamped(self, app, tmp_path):
+        with open(tmp_path / "history" / "job.jsonl", "w") as f:
+            f.writelines(json.dumps({"timestamp": f"t{i}", "event_type": "ls"}) + "\n" for i in range(700))
+        _, body = app.handle("/api/history", {"session": "job", "limit": "100000"})
+        assert len(body["events"]) == 500
+
+    def test_no_api_state(self, tmp_path):
+        app = server.Dashboard(None, sessions_path=str(tmp_path / "s.json"), history_dir=str(tmp_path))
+        _, body = app.handle("/api/state", {})
+        assert body["api"]["enabled"] is False
+        assert body["config"]["api_enabled"] is False
+        assert body["config"]["interval"] is None
