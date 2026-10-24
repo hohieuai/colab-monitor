@@ -329,3 +329,63 @@ def test_failed_run_message_without_error_text_is_a_sentence():
     tl = timeline(1, name="job", executions=[(0.1, True)])
     ins = metrics.compute_insights([], {"e": tl}, [], [], None, now=NOW, today_start=NOW - H)
     assert ins["attention"][0]["message"] == "A run in job failed 6 min ago."
+
+
+class TestReviewFindings:
+    """Edge cases from the review of the insights feature."""
+
+    def test_metric_names_that_contain_error_are_metrics(self):
+        job = metrics.parse_log(["Epoch 3/10 - loss: 0.07 - mean_absolute_error: 0.20 - val_error=0.08"])
+        assert job["metrics"]["mean_absolute_error"] == 0.20 and job["metrics"]["val_error"] == 0.08
+        assert job["last_error"] is None
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            "ValueError: schema mismatch",
+            "Traceback (most recent call last):",
+            "torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 2.00 GiB",
+            "ERROR: Could not find a version that satisfies the requirement torch==9",
+            "Failed to connect to the data server",
+        ],
+    )
+    def test_error_lines_are_errors(self, line):
+        assert metrics.parse_log(["ok", line])["last_error"] == line
+
+    @pytest.mark.parametrize("line", ["errors=0", "3 passed, 0 failed", "no error here", "error_rate: 0.1"])
+    def test_lines_that_only_mention_errors_are_not_errors(self, line):
+        assert metrics.parse_log([line])["last_error"] is None
+
+    def test_hugging_face_and_json_metrics(self):
+        hf = metrics.parse_log(["{'loss': 0.41, 'grad_norm': 1.2, 'learning_rate': 4.5e-05, 'epoch': 0.25}"])
+        assert hf["metrics"] == {"loss": 0.41, "grad_norm": 1.2, "learning_rate": 4.5e-05}
+        assert metrics.parse_log(['{"eval_loss": 0.38, "eval_accuracy": 0.91}'])["metrics"] == {
+            "eval_loss": 0.38,
+            "eval_accuracy": 0.91,
+        }
+
+    @pytest.mark.parametrize(
+        "line", ["GPU mem: 15.2GB / 16GB, temp: 71C", "serving at http://localhost:8888", "took 3.2s"]
+    )
+    def test_numbers_with_units_and_addresses_are_not_metrics(self, line):
+        assert metrics.parse_log([line])["metrics"] == {}
+
+    def test_a_malformed_progress_clock_is_ignored(self):
+        assert metrics.parse_log(["1/2 [1:2<3::4]"])["eta_s"] is None
+
+    def test_long_digit_runs_parse_quickly(self):
+        import time
+
+        start = time.perf_counter()
+        metrics.parse_log(["1" * 50_000, "/".join(["9" * 5_000] * 4)])
+        assert time.perf_counter() - start < 0.5
+
+    def test_only_the_newest_log_of_a_session_can_stall(self):
+        session = {"name": "train", "endpoint": "e1", "status": "busy", "running": "run(x.py)"}
+        logs = [
+            {"name": "train-run1.log", "path": "/r/train-run1.log", "mtime": NOW - 86400, "lines": ["old"]},
+            {"name": "train-run2.log", "path": "/r/train-run2.log", "mtime": NOW - 3600, "lines": ["new"]},
+        ]
+        jobs = metrics.compute_insights([session], {}, [], logs, None, now=NOW)["jobs"]
+        stalled = {j["name"]: j["stalled"] for j in jobs}
+        assert stalled == {"train-run1.log": False, "train-run2.log": True}

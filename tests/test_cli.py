@@ -448,3 +448,53 @@ def test_an_older_dashboard_is_skipped(tmp_path, capsys, monkeypatch):
     captured = capsys.readouterr()
     assert json.loads(captured.out)["source"] == "direct"
     assert "older version" in captured.err
+
+
+class TestReviewFindings:
+    """Edge cases from the review of the insights feature."""
+
+    def test_a_non_http_service_on_the_port_is_skipped(self, tmp_path, capsys, monkeypatch):
+        import socketserver
+
+        class Banner(socketserver.BaseRequestHandler):
+            def handle(self):
+                self.request.sendall(b"SSH-2.0-OpenSSH_9.6\r\n")
+
+        service = socketserver.ThreadingTCPServer(("127.0.0.1", 0), Banner)
+        threading.Thread(target=service.serve_forever, daemon=True).start()
+        monkeypatch.setenv("HOME", str(tmp_path))
+        try:
+            assert cli.main(["status", "--port", str(service.server_address[1]), "--json"]) == 0
+        finally:
+            service.shutdown()
+            service.server_close()
+        assert json.loads(capsys.readouterr().out)["source"] == "direct"
+
+    def test_a_slow_dashboard_is_still_used(self, fixture_state, capsys):
+        _, app = fixture_state
+
+        class Slow:
+            def handle(self, path, query):
+                time.sleep(1.0)
+                return app.handle(path, query)
+
+        server = make_server(Slow(), "127.0.0.1", 0)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            assert cli.main(["status", "--port", str(server.server_address[1]), "--json"]) == 0
+        finally:
+            server.shutdown()
+            server.server_close()
+        assert json.loads(capsys.readouterr().out)["source"] == "dashboard"
+
+    def test_unknown_usage_is_not_reported_as_idle(self):
+        text = cli.render(_minimal_report(compute_units={"balance": None, "rate_per_hour": None}), width=100)
+        assert "nothing is using" not in text
+        idle = _minimal_report(compute_units={"balance": 5.0, "rate_per_hour": 0.0})
+        assert "nothing is using compute units" in cli.render(idle, width=100)
+
+    def test_terminal_control_codes_in_logs_are_not_printed(self):
+        job = _job("x.log", 3.0, last_error="\x1b]0;pwned\x07boom\x1bc")
+        text = cli.render(_minimal_report(jobs=[job]), width=120, color=True)
+        assert "\x1b]" not in text and "\x1bc" not in text and "\x07" not in text
+        assert "boom" in text

@@ -6,6 +6,7 @@ import datetime
 import importlib.resources
 import ipaddress
 import json
+import math
 import os
 import sys
 import threading
@@ -24,6 +25,11 @@ DEFAULT_PORT = 26522  # "COLAB" on a phone keypad; clear of common dev ports and
 DEFAULT_LOG_DIR = "~/colab-runs"
 USAGE_RANGES = {"1h": 3600, "24h": 86400, "7d": 7 * 86400, "30d": 30 * 86400}
 MAX_CHART_POINTS = 360
+
+
+def _is_positive(value: float) -> bool:
+    """True for a finite number above 0. Infinity would make the JSON answer invalid."""
+    return math.isfinite(value) and value > 0
 
 
 def _clamp_int(value: str | None, default: int, low: int, high: int) -> int:
@@ -93,7 +99,7 @@ class Dashboard:
                     value = float(query[param])
                 except ValueError:
                     value = -1.0
-                if not value > 0:
+                if not _is_positive(value):
                     raise ValueError(f"{param} must be a positive number")
                 values[field] = value
         return dataclasses.replace(self.thresholds, **values)
@@ -363,7 +369,7 @@ def finish_args(p: argparse.ArgumentParser, args: argparse.Namespace) -> argpars
     """Validate and normalise the shared options."""
     for name in ("idle_alert", "stall_alert", "runway_alert"):
         value = getattr(args, name, None)
-        if value is not None and not value > 0:
+        if value is not None and not _is_positive(value):
             p.error(f"--{name.replace('_', '-')} must be a positive number")
     if args.log_dir is None:
         args.log_dir = [DEFAULT_LOG_DIR]

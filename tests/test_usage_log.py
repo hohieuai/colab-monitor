@@ -66,3 +66,19 @@ def test_read_reuses_parsed_samples_until_the_file_changes(tmp_path, monkeypatch
     monkeypatch.undo()
     log.append({"balance": 9.0, "rate_per_hour": 1.0}, now=200.0)
     assert [p["t"] for p in log.read()] == [100.0, 200.0]
+
+
+def test_samples_with_wrong_types_are_skipped(tmp_path):
+    path = tmp_path / "usage.jsonl"
+    path.write_text(
+        "\n".join(
+            [
+                json.dumps({"t": 1.0, "balance": None, "rate": 1.0}),
+                json.dumps({"t": "x", "balance": 5.0, "rate": 1.0}),
+                json.dumps({"t": 2.0, "balance": 5.0, "rate": True}),
+                json.dumps({"t": 3.0, "balance": 5.0, "rate": 1.0}),
+            ]
+        )
+        + "\n"
+    )
+    assert UsageLog(str(path)).read() == [{"t": 3.0, "balance": 5.0, "rate": 1.0}]

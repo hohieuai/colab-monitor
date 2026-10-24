@@ -441,3 +441,10 @@ class TestEndpointLimits:
         assert body["api"]["enabled"] is False
         assert body["config"]["api_enabled"] is False
         assert body["config"]["interval"] is None
+
+
+@pytest.mark.parametrize("value", ["inf", "-inf", "nan", "0", "-1", "x"])
+def test_thresholds_must_be_finite_positive_numbers(dashboard, value):
+    app, _ = dashboard
+    status, body = app.handle("/api/state", {"idle_alert": value})
+    assert status == 400 and "positive number" in body["error"]

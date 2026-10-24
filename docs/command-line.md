@@ -122,7 +122,7 @@ says otherwise, and every value that Colab Monitor cannot work out is `null`.
 | `machines[].rate` | number | Compute units per hour for this machine. |
 | `machines[].rate_estimated` | boolean | `true` when `rate` is an estimate. See [How Colab Monitor works](how-it-works.md#what-a-machine-costs). |
 | `machines[].cost`, `machines[].idle_cost` | number | Compute units used since the machine started, and while it was idle. |
-| `jobs[]` | array | One entry for each log file. |
+| `jobs[]` | array | One entry for each log file that exists. |
 | `jobs[].name`, `jobs[].path` | string | The file name and its full path. |
 | `jobs[].session` | string | The machine that the log belongs to, matched by name. |
 | `jobs[].silent_s` | number | Seconds since the file last changed. |

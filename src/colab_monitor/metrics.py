@@ -183,15 +183,21 @@ def run_counts(timelines: dict, now: float) -> dict:
 # ---------- Job logs ----------
 
 _NUMBER = r"-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?"
-_NUMBER_END = r"(?![\d.%/]|,\d)"  # so "44,402", "8%" and "8/120" are not read as 44, 8 and 8
+# So "44,402", "8%", "8/120", "15.2GB", and "3.2s" are not read as the numbers 44, 8, 8, 15.2, and 3.2.
+_NUMBER_END = r"(?![\d.%/A-Za-z]|,\d)"
+_CLOCK = r"\d+(?::\d+){0,2}"
 _TQDM = re.compile(
-    r"(\d+)/(\d+)\s*\[(?P<elapsed>[\d:]+)<(?P<remaining>[\d:]+|\?)"
+    rf"(\d+)/(\d+)\s*\[(?P<elapsed>{_CLOCK})<(?P<remaining>{_CLOCK}|\?)(?=[,\]])"
     r"(?:,\s*(?P<speed>[\d.]+\s*(?:it/s|s/it)|\?it/s))?"
 )
 _STEP = re.compile(r"\bstep\s*[:=]?\s*(\d+)\s*/\s*(\d+)", re.IGNORECASE)
 _EPOCH = re.compile(r"\bepoch\s*[:=]?\s*(\d+)\s*/\s*(\d+)", re.IGNORECASE)
 _SPEED = re.compile(r"(\d+(?:\.\d+)?)\s*(it/s|s/it)")
-_KEY_VALUE = re.compile(rf"(?<![\w.])([A-Za-z][A-Za-z0-9_.]*?)\s*[=:]\s*({_NUMBER}){_NUMBER_END}")
+# `name=1`, `name: 1`, and quoted keys as in Hugging Face's `{'loss': 0.41}` or JSON. A name right
+# after "/" or "." is part of a path or address, such as `localhost:8888`.
+_KEY_VALUE = re.compile(
+    rf"(?<![\w./])['\"]?([A-Za-z][A-Za-z0-9_.]*?)['\"]?\s*[=:]\s*({_NUMBER}){_NUMBER_END}"
+)
 _KNOWN_METRICS = (
     "loss|train_loss|val_loss|eval_loss|test_loss|acc|accuracy|val_acc|val_accuracy|"
     "f1|auc|bleu|perplexity|ppl|reward|lr|learning_rate"
@@ -215,7 +221,14 @@ _NOT_METRICS = frozenset(
         "seed",
     }
 )
-_ERROR = re.compile(r"(error|exception|traceback|failed|out of memory)", re.IGNORECASE)
+# A line that reports a failure: a Python exception or traceback, running out of memory, or a line
+# that starts with "error", "fatal", or "failed". Metric names such as "val_error" are not failures.
+_ERROR = re.compile(
+    r"Traceback \(most recent call last\)|\b[A-Z]\w*(?:Error|Exception)\b"
+    r"|(?i:\bout of memory\b|^\s*(?:error|fatal|failed)\b)"
+)
+# Only this much of a line is parsed, which keeps the regular expressions fast on huge lines.
+MAX_LINE_CHARS = 2_000
 _SUFFIXES = (".log", ".out", ".err")
 
 
@@ -251,6 +264,7 @@ def _progress(line: str) -> tuple[float, float | None, str | None] | None:
 
 def parse_log(lines: list[str]) -> dict:
     """Progress, ETA, speed, latest training numbers, and the last error from a log's last lines."""
+    lines = [line[:MAX_LINE_CHARS] for line in lines]
     progress = eta = speed = None
     for line in reversed(lines):
         found = _progress(line)
@@ -264,9 +278,8 @@ def parse_log(lines: list[str]) -> dict:
             continue
         for pattern in (_KEY_VALUE, _KNOWN_SPACED):
             for key, number in pattern.findall(line):
-                if (
-                    len(key) < 2 or key.lower() in _NOT_METRICS
-                ):  # "mean y: -10.8" names a column, not a metric
+                # One-letter names, as in "mean y: -10.8", name a column, not a metric.
+                if len(key) < 2 or key.lower() in _NOT_METRICS:
                     continue
                 values.pop(key, None)  # re-insert so the latest values come last
                 values[key] = float(number)
@@ -328,14 +341,22 @@ def compute_insights(
 
     names = [s["name"] for s in sessions if s.get("name")]
     status_by_name = {s["name"]: s.get("status") for s in sessions if s.get("name")}
+    sessions_of_logs = {log["path"]: match_session(log["name"], names) for log in logs}
+    # A session name can be reused, so only its newest log belongs to the run in progress.
+    newest: dict[str, float] = {}
+    for log in logs:
+        session = sessions_of_logs[log["path"]]
+        if session and log.get("mtime"):
+            newest[session] = max(newest.get(session, 0.0), log["mtime"])
     jobs = []
     for log in logs:
         parsed = parse_log(log.get("lines") or [])
-        session = match_session(log["name"], names)
+        session = sessions_of_logs[log["path"]]
         silent = now - log["mtime"] if log.get("mtime") else None
         stalled = bool(
             session
             and status_by_name.get(session) == "busy"
+            and log.get("mtime") == newest.get(session)
             and silent is not None
             and silent > thresholds.stall_minutes * 60
         )

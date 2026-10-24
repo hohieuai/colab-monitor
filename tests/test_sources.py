@@ -525,3 +525,61 @@ class TestSourcesEdgeCases:
 
     def test_strip_ansi_handles_cursor_and_title_codes(self):
         assert sources.strip_ansi("\x1b[2K\x1b[1Gdone\x1b]0;title\x07!") == "done!"
+
+
+class TestReviewFindings:
+    """Edge cases from the review of the insights feature."""
+
+    @staticmethod
+    def _history(path, events):
+        path.write_text("".join(e if isinstance(e, str) else json.dumps(e) + "\n" for e in events))
+
+    def _run(self, tmp_path, outputs):
+        history = tmp_path / "history"
+        history.mkdir(exist_ok=True)
+        self._history(
+            history / "job.jsonl",
+            [
+                {"timestamp": "2026-10-24T10:00:00+00:00", "event_type": "session_created", "endpoint": "e1"},
+                {"timestamp": "2026-10-24T10:05:00+00:00", "event_type": "execution", "outputs": outputs},
+            ],
+        )
+        sources._timeline_cache.clear()
+        return sources.session_timelines(str(history))["e1"]
+
+    @pytest.mark.parametrize("evalue", ["", "None", "0"])
+    def test_a_clean_sys_exit_is_not_a_failed_run(self, tmp_path, evalue):
+        ename = "\x1b[0;31mSystemExit\x1b[0m"  # Colab colours exception names
+        tl = self._run(tmp_path, [{"output_type": "error", "ename": ename, "evalue": evalue}])
+        assert tl["executions"][0][1] is False and tl["last_error"] is None
+
+    @pytest.mark.parametrize("evalue", ["1", "3", "'bad input'"])
+    def test_sys_exit_with_a_failure_code_is_a_failed_run(self, tmp_path, evalue):
+        tl = self._run(tmp_path, [{"output_type": "error", "ename": "SystemExit", "evalue": evalue}])
+        assert tl["executions"][0][1] is True and tl["last_error"] == f"SystemExit: {evalue}"
+
+    def test_history_readers_skip_lines_that_are_not_objects(self, tmp_path):
+        history = tmp_path / "history"
+        history.mkdir()
+        self._history(
+            history / "job.jsonl",
+            [
+                "null\n",
+                "[1, 2]\n",
+                '"text"\n',
+                {"timestamp": 12345, "event_type": "execution"},
+                {"timestamp": "2026-10-24T10:00:00+00:00", "event_type": "session_created", "endpoint": "e1"},
+            ],
+        )
+        sources._timeline_cache.clear()
+        sources._endpoint_cache.clear()
+        events = sources.read_history(str(history), "job")
+        assert [e["type"] for e in events] == ["execution", "session_created"]
+        assert events[0]["timestamp"] is None
+        assert sources.recent_activity(str(history))
+        assert "e1" in sources.session_timelines(str(history))
+        assert "e1" in sources.history_endpoints(str(history))
+
+    def test_strip_ansi_removes_titles_links_and_resets(self):
+        line = "\x1b]0;TITLE\x1b\\Error: \x1b]8;;https://x\x1b\\boom\x1b]8;;\x1b\\\x1bc"
+        assert sources.strip_ansi(line) == "Error: boom"

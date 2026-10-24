@@ -614,7 +614,11 @@
       return b;
     }));
   }
-  const ERR = /(traceback|error|exception|failed|out of memory)/i;
+  // The same rule as the server's metrics.py: exceptions, tracebacks, out of memory, and lines that
+  // start with error, fatal, or failed. Metric names such as val_error are not errors.
+  const isErrorLine = (line) =>
+    /Traceback \(most recent call last\)|\b[A-Z]\w*(?:Error|Exception)\b/.test(line) ||
+    /\bout of memory\b|^\s*(?:error|fatal|failed)\b/i.test(line);
   const WARN = /(warn|deprecat)/i;
   function logStatusRight() {
     const entry = state?.logs.find((l) => l.path === selectedLog);
@@ -632,7 +636,7 @@
       view.replaceChildren(el("div", { className: "term-empty", textContent: logLines.length ? `No lines match “${q}”.` : "Empty file. Waiting for output…" }));
     } else {
       view.replaceChildren(...shown.map(([n, line]) => {
-        const row = el("div", { className: `tl${ERR.test(line) ? " err" : WARN.test(line) ? " warn" : ""}` }, el("span", { className: "ln", textContent: String(n) }));
+        const row = el("div", { className: `tl${isErrorLine(line) ? " err" : WARN.test(line) ? " warn" : ""}` }, el("span", { className: "ln", textContent: String(n) }));
         const body = el("span");
         if (ql) {
           const low = line.toLowerCase();
@@ -648,7 +652,7 @@
       }));
     }
     if ($("follow").checked || forceBottom) pinLog();
-    const errs = logLines.filter((l) => ERR.test(l)).length;
+    const errs = logLines.filter((l) => isErrorLine(l)).length;
     $("term-left").textContent = selectedLog ? `${plural(logLines.length, "line")}${q ? ` · ${shown.length} shown` : ""}${errs ? ` · ${plural(errs, "error line")}` : ""}` : "";
     logStatusRight();
   }

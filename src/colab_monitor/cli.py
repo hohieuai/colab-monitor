@@ -3,8 +3,10 @@
 import argparse
 import contextlib
 import datetime
+import http.client
 import json
 import os
+import re
 import select
 import shutil
 import signal
@@ -20,7 +22,12 @@ from colab_monitor.poller import ApiPoller
 from colab_monitor.usage_log import UsageLog
 
 EXIT_ATTENTION = 3  # `status --exit-code`: something needs attention
-DASHBOARD_TIMEOUT = 0.5
+# A running dashboard answers from its caches, but its first answer reads every history file and log.
+DASHBOARD_TIMEOUT = 5.0
+# Ways a dashboard probe fails: nothing listening, another service, or a broken or partial reply.
+_DASHBOARD_ERRORS = (OSError, ValueError, http.client.HTTPException)
+# Terminal control characters, which a job's output must not send to the user's terminal.
+_CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 WATCH_POLL_INTERVAL = 60.0
 MAX_JOBS_SHOWN = 8  # the text view; --json lists every log
 TOKEN_PATH = "~/.config/colab-cli/token.json"
@@ -170,7 +177,7 @@ def _find_dashboard(args: argparse.Namespace) -> tuple[DashboardSource, dict] | 
         server._err(f"The dashboard on port {args.port} is an older version; reading the files instead.")
         server._err("Stop it and start `colab-monitor` again to update it.")
         return None
-    except (OSError, ValueError):  # nothing listening, not ours, or a broken reply
+    except _DASHBOARD_ERRORS:
         return None
 
 
@@ -325,6 +332,7 @@ Line = list[tuple[str, str | None]]
 def _fit(line: Line, width: int) -> Line:
     out, used = [], 0
     for text, style in line:
+        text = _CONTROL.sub("", text)
         room = width - used
         if room <= 0:
             break
@@ -385,7 +393,7 @@ def _summary_lines(report: dict, now: float) -> list[Line]:
     lines.append(row("Usage", "-" if rate is None else f"{rate:.2f}/h"))
     runway = report["runway"]
     if runway.get("hours") is None:
-        lines.append(row("Runway", "-", "" if rate else "  (nothing is using compute units)"))
+        lines.append(row("Runway", "-", "  (nothing is using compute units)" if rate == 0 else ""))
     else:
         until = f"  until {_clock(runway['empty_at'], now)}" if runway.get("empty_at") else ""
         lines.append(row("Runway", _long_duration(runway["hours"]), until))
@@ -659,7 +667,7 @@ def watch(argv: list[str]) -> int:
                     break
                 try:
                     state, error = source.state(), None
-                except (OSError, ValueError) as e:
+                except _DASHBOARD_ERRORS as e:
                     error = str(e)
     except KeyboardInterrupt:
         pass
