@@ -493,3 +493,35 @@ class TestLogTails:
             )
             == []
         )
+
+
+class TestSourcesEdgeCases:
+    def test_tail_tolerates_invalid_utf8(self, tmp_path):
+        path = tmp_path / "x.log"
+        path.write_bytes(b"ok\n\xff\xfe broken\n")
+        lines = sources.tail_lines(str(path))
+        assert lines[0] == "ok" and "broken" in lines[1]
+
+    def test_discover_logs_ignores_missing_dirs_and_duplicates(self, tmp_path):
+        d = tmp_path / "runs"
+        d.mkdir()
+        (d / "a.log").write_text("a\n")
+        logs = sources.discover_logs([str(d / "a.log")], [str(d), str(tmp_path / "missing")])
+        assert [entry["name"] for entry in logs] == ["a.log"]
+
+    def test_read_history_skips_corrupt_lines(self, tmp_path):
+        (tmp_path / "job.jsonl").write_text('{"timestamp": "t0", "event_type": "ls"}\nnot json\n')
+        assert [e["type"] for e in sources.read_history(str(tmp_path), "job")] == ["ls"]
+
+    def test_history_endpoints_refresh_when_file_changes(self, tmp_path):
+        path = tmp_path / "job.jsonl"
+        path.write_text(
+            json.dumps({"timestamp": "t0", "event_type": "session_created", "endpoint": "e1"}) + "\n"
+        )
+        assert sources.history_endpoints(str(tmp_path))["e1"]["ended"] is False
+        with open(path, "a") as f:
+            f.write(json.dumps({"timestamp": "t1", "event_type": "session_terminated"}) + "\n")
+        assert sources.history_endpoints(str(tmp_path))["e1"]["ended"] is True
+
+    def test_strip_ansi_handles_cursor_and_title_codes(self):
+        assert sources.strip_ansi("\x1b[2K\x1b[1Gdone\x1b]0;title\x07!") == "done!"
