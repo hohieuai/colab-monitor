@@ -45,6 +45,16 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- A long progress bar no longer empties the **Logs** page or hides a job's progress once its output
+  exceeds the 256 KB read window.
+- Session names with spaces or other characters that the `colab` CLI accepts work on the **History**
+  and **Overview** pages.
+- A machine that Colab still lists 10 minutes after the CLI stopped it shows as an orphan instead of
+  staying "Stopping", since it keeps billing.
+- Text typed at input prompts, which can be a password, is hidden on the **History** page.
+- `--history-dir` accepts `~`.
+- The usage log is pruned daily while the dashboard runs, not only at startup.
+- The command that releases an orphan works for users who sign in with `--auth adc`.
 - `/api/log` reads the same resolved file that it checked, so paths such as `~/colab-runs/a.log` or
   `a.log/` return the file's lines instead of an empty answer.
 - A path with a NUL byte gets a 403 answer instead of no answer and a traceback.

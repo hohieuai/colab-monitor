@@ -52,6 +52,12 @@ An orphaned machine still uses compute units, and the CLI will not stop it.
    uvx --from google-colab-cli python -c "from colab_cli.common import state; state.client.unassign('ENDPOINT')"
    ```
 
+   If you sign in with `--auth adc`, run this instead, so the command doesn't wait for an OAuth code:
+
+   ```bash
+   uvx --from google-colab-cli python -c "from colab_cli.auth import AuthProvider; from colab_cli.common import state; state.auth_provider = AuthProvider.ADC; state.client.unassign('ENDPOINT')"
+   ```
+
 3. Run `colab sessions` to confirm that the machine is gone.
 
 ## Fix "Not signed in to Colab" from status or watch

@@ -324,10 +324,9 @@ class TestHistoryEndpoints:
                 {"timestamp": "t1", "event_type": "execution", "code": "x"},
             ],
         )
-        assert sources.history_endpoints(str(tmp_path)) == {
-            "e1": {"name": "done", "ended": True},
-            "e2": {"name": "live", "ended": False},
-        }
+        found = sources.history_endpoints(str(tmp_path))
+        assert {e: v["name"] for e, v in found.items()} == {"e1": "done", "e2": "live"}
+        assert isinstance(found["e1"]["ended"], float) and found["e2"]["ended"] is None
 
     def test_reused_name_tracks_latest_session(self, tmp_path):
         self._write(
@@ -340,21 +339,24 @@ class TestHistoryEndpoints:
             ],
         )
         found = sources.history_endpoints(str(tmp_path))
-        assert found["old"]["ended"] is True
-        assert found["new"]["ended"] is False
+        assert found["old"]["ended"] is not None
+        assert found["new"]["ended"] is None
 
 
 class TestMergeWithHistory:
     def test_just_stopped_machine_is_stopping_not_orphan(self):
         [s] = sources.merge_sessions(
-            [], [{"endpoint": "e1", "accelerator": "NONE"}], {"e1": {"name": "nb", "ended": True}}
+            [],
+            [{"endpoint": "e1", "accelerator": "NONE"}],
+            {"e1": {"name": "nb", "ended": 990.0}},
+            now=1000.0,
         )
         assert s["status"] == "stopping"
         assert s["name"] == "nb"
 
     def test_orphan_known_from_history_keeps_its_name(self):
         [s] = sources.merge_sessions(
-            [], [{"endpoint": "e1", "accelerator": "NONE"}], {"e1": {"name": "other", "ended": False}}
+            [], [{"endpoint": "e1", "accelerator": "NONE"}], {"e1": {"name": "other", "ended": None}}
         )
         assert s["status"] == "orphan"
         assert s["name"] == "other"
@@ -518,10 +520,10 @@ class TestSourcesEdgeCases:
         path.write_text(
             json.dumps({"timestamp": "t0", "event_type": "session_created", "endpoint": "e1"}) + "\n"
         )
-        assert sources.history_endpoints(str(tmp_path))["e1"]["ended"] is False
+        assert sources.history_endpoints(str(tmp_path))["e1"]["ended"] is None
         with open(path, "a") as f:
             f.write(json.dumps({"timestamp": "t1", "event_type": "session_terminated"}) + "\n")
-        assert sources.history_endpoints(str(tmp_path))["e1"]["ended"] is True
+        assert sources.history_endpoints(str(tmp_path))["e1"]["ended"] is not None
 
     def test_strip_ansi_handles_cursor_and_title_codes(self):
         assert sources.strip_ansi("\x1b[2K\x1b[1Gdone\x1b]0;title\x07!") == "done!"
@@ -583,3 +585,68 @@ class TestReviewFindings:
     def test_strip_ansi_removes_titles_links_and_resets(self):
         line = "\x1b]0;TITLE\x1b\\Error: \x1b]8;;https://x\x1b\\boom\x1b]8;;\x1b\\\x1bc"
         assert sources.strip_ansi(line) == "Error: boom"
+
+
+class TestSecondReviewFindings:
+    """Edge cases from the review of the dashboard, server, and data readers."""
+
+    def test_a_progress_bar_longer_than_the_read_window_shows_its_last_state(self, tmp_path):
+        path = tmp_path / "train.log"
+        bar = "".join(f"\rtrain: {i % 100:3d}%|{'#' * (i % 10):<10}| {i}/10000" for i in range(10000))
+        path.write_text(bar + "\rtrain: 100%|##########| 10000/10000")
+        assert len(path.read_bytes()) > 256 * 1024
+        assert sources.tail_lines(str(path)) == ["train: 100%|##########| 10000/10000"]
+
+    @pytest.mark.parametrize("name", ["my run", "lr=3e-4", "exp+1", "thí nghiệm"])
+    def test_any_session_name_the_cli_accepts_has_history(self, tmp_path, name):
+        (tmp_path / f"{name}.jsonl").write_text(
+            json.dumps({"timestamp": "2026-10-24T10:00:00+00:00", "event_type": "session_created"}) + "\n"
+        )
+        assert name in sources.history_names(str(tmp_path))
+        assert [e["type"] for e in sources.read_history(str(tmp_path), name)] == ["session_created"]
+        assert sources.recent_activity(str(tmp_path))[0]["session"] == name
+
+    @pytest.mark.parametrize("name", ["", ".", "..", "../secret", "a/b", "a\\b", ".hidden", "a\x00b"])
+    def test_names_that_could_leave_the_history_folder_are_refused(self, tmp_path, name):
+        with pytest.raises(ValueError):
+            sources.read_history(str(tmp_path), name)
+
+    def test_hidden_files_are_not_listed_as_sessions(self, tmp_path):
+        (tmp_path / ".hidden.jsonl").write_text("")
+        (tmp_path / "job.jsonl").write_text("")
+        assert sources.history_names(str(tmp_path)) == ["job"]
+
+    def test_text_typed_at_input_prompts_is_not_shown(self):
+        event = {"timestamp": "2026-10-24T10:00:00+00:00", "event_type": "input_reply", "value": "hf_secret"}
+        summary = sources.summarize_event(event)
+        assert "hf_secret" not in json.dumps(summary)
+        assert summary["details"]["value"] == "(hidden)"
+
+    def test_outputs_that_are_not_objects_are_skipped(self):
+        event = {
+            "event_type": "execution",
+            "outputs": ["text", None, {"output_type": "stream", "text": "ok"}],
+        }
+        assert sources.summarize_event(event)["output"] == "ok"
+
+    def test_a_machine_colab_still_lists_long_after_stopping_is_an_orphan(self):
+        now = 1_800_000_000.0
+        assignment = [{"endpoint": "e1", "accelerator": "T4"}]
+        recent = {"e1": {"name": "job", "ended": now - 60}}
+        old = {"e1": {"name": "job", "ended": now - 3600}}
+        assert sources.merge_sessions([], assignment, recent, now=now)[0]["status"] == "stopping"
+        merged = sources.merge_sessions([], assignment, old, now=now)[0]
+        assert merged["status"] == "orphan" and merged["name"] == "job"
+
+    def test_history_records_when_a_machine_was_stopped(self, tmp_path):
+        (tmp_path / "job.jsonl").write_text(
+            json.dumps(
+                {"timestamp": "2026-10-24T10:00:00+00:00", "event_type": "session_created", "endpoint": "e1"}
+            )
+            + "\n"
+            + json.dumps({"timestamp": "2026-10-24T11:00:00+00:00", "event_type": "session_terminated"})
+            + "\n"
+        )
+        sources._endpoint_cache.clear()
+        ended = sources.history_endpoints(str(tmp_path))["e1"]["ended"]
+        assert ended == pytest.approx(sources._epoch("2026-10-24T11:00:00+00:00"))

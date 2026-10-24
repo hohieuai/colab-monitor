@@ -96,6 +96,14 @@ def test_stat_feet_show_spend_and_when_units_run_out(page, site):
     expect(page.locator("#s-runway-foot")).to_have_text(re.compile(r"^Runs out \w+"))
 
 
+def test_the_release_command_matches_the_sign_in_method(page_factory, site, adc_site):
+    oauth = open_route(page_factory(), site, "overview", "#attention-list li")
+    assert "AuthProvider" not in oauth.inner_text("#orphan-command")
+    adc = open_route(page_factory(), adc_site, "overview", "#attention-list li")
+    command = adc.inner_text("#orphan-command")
+    assert "state.auth_provider = AuthProvider.ADC" in command and "unassign('ENDPOINT')" in command
+
+
 def test_active_machines_show_uptime_idle_and_rate(page, site):
     open_route(page, site, "overview", "#ov-sessions li .meta")
     rows = page.locator("#ov-sessions li")

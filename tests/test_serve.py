@@ -124,3 +124,9 @@ def test_alert_options_must_be_finite_positive_numbers(value, capsys):
     with pytest.raises(SystemExit) as exit_info:
         server._parse_args(["--idle-alert", value])
     assert exit_info.value.code == 2 and "positive number" in capsys.readouterr().err
+
+
+def test_history_dir_expands_the_home_folder(monkeypatch, tmp_path):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    args = server._parse_args(["--history-dir=~/.config/colab-cli/history"])
+    assert args.history_dir == str(tmp_path / ".config" / "colab-cli" / "history")

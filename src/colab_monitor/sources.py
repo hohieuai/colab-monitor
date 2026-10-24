@@ -9,6 +9,7 @@ import datetime
 import json
 import os
 import re
+import time
 from collections.abc import Iterable
 
 from colab_cli.state import StateStore
@@ -18,7 +19,15 @@ LOG_SUFFIXES = (".log", ".out", ".err")
 MAX_CODE_CHARS = 2_000
 MAX_OUTPUT_CHARS = 4_000
 
-_SESSION_NAME = re.compile(r"^[A-Za-z0-9._-]+$")
+# The colab CLI accepts any session name, and names its history file after it. Refuse only names
+# that are not a plain file name in the history folder.
+_UNSAFE_NAME = re.compile(r"[/\\\x00]|^\.")
+
+
+def _is_session_name(name: str) -> bool:
+    return bool(name) and not _UNSAFE_NAME.search(name)
+
+
 # Terminal escape codes: colours and cursor moves (Python tracebacks from Colab are full of them),
 # window titles and links ended by BEL or ESC \, and two-character codes such as a reset (ESC c).
 _ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-~]")
@@ -90,8 +99,13 @@ def _sessions_in(path: str) -> list[dict]:
     return result
 
 
+# How long Colab may keep listing a machine that the CLI stopped before it counts as an orphan.
+# The CLI records the stop even when its unassign request fails, and Colab then keeps billing.
+STOPPING_GRACE_SECONDS = 10 * 60
+
+
 def merge_sessions(
-    local: list[dict], assignments: list[dict] | None, known: dict | None = None
+    local: list[dict], assignments: list[dict] | None, known: dict | None = None, now: float | None = None
 ) -> list[dict]:
     """Join local sessions with server assignments by endpoint.
 
@@ -100,10 +114,12 @@ def merge_sessions(
     the server but unknown locally, still billing), gone (known locally but no
     longer on the server), unknown (server state not fetched yet).
 
-    `known` maps endpoints from session history to {"name", "ended"}; it names
-    orphans and stops a just-stopped machine from looking like one.
+    `known` maps endpoints from session history to {"name", "ended"}, where `ended` is when the CLI
+    stopped the machine, or None. It names orphans and stops a just-stopped machine from looking
+    like one. A machine still listed STOPPING_GRACE_SECONDS after it was stopped is an orphan.
     """
     known = known or {}
+    now = time.time() if now is None else now
     if assignments is None:
         return [{**s, "status": "unknown"} for s in local]
 
@@ -118,7 +134,8 @@ def merge_sessions(
             merged.append({**s, **server, "status": status})
     for server in by_endpoint.values():
         hist = known.get(server["endpoint"])
-        status = "stopping" if hist and hist["ended"] else "orphan"
+        ended = hist["ended"] if hist else None
+        status = "stopping" if ended and now - ended <= STOPPING_GRACE_SECONDS else "orphan"
         merged.append({"name": hist["name"] if hist else None, **server, "status": status})
     return merged
 
@@ -140,7 +157,7 @@ def tail_lines(path: str, max_lines: int = 200, max_bytes: int = 256 * 1024) -> 
 
     text = strip_ansi(data.decode("utf-8", errors="replace"))
     lines = text.split("\n")
-    if start > 0:
+    if start > 0 and len(lines) > 1:
         lines = lines[1:]  # first line is probably cut in half
     if lines and lines[-1] == "":
         lines = lines[:-1]
@@ -216,7 +233,7 @@ def resolve_log(path: str, files: Iterable[str], dirs: Iterable[str]) -> str | N
 def history_names(history_dir: str = DEFAULT_HISTORY_DIR) -> list[str]:
     """Session names with a history file, most recently written first."""
     try:
-        names = [n for n in os.listdir(history_dir) if n.endswith(".jsonl")]
+        names = [n for n in os.listdir(history_dir) if n.endswith(".jsonl") and _is_session_name(n)]
     except OSError:
         return []
     names.sort(key=lambda n: os.path.getmtime(os.path.join(history_dir, n)), reverse=True)
@@ -242,6 +259,8 @@ def summarize_event(event: dict) -> dict:
         images = 0
         error = None
         for out in outputs:
+            if not isinstance(out, dict):
+                continue
             kind = out.get("output_type")
             if kind == "stream":
                 text.append(out.get("text", ""))
@@ -262,6 +281,8 @@ def summarize_event(event: dict) -> dict:
         for k, v in event.items()
         if k not in ("timestamp", "event_type", "code", "outputs") and isinstance(v, (str, int, float, bool))
     }
+    if summary["type"] == "input_reply" and "value" in details:
+        details["value"] = "(hidden)"  # may be a password typed at a getpass() prompt
     if details:
         summary["details"] = details
     return summary
@@ -269,7 +290,7 @@ def summarize_event(event: dict) -> dict:
 
 def read_history(history_dir: str, name: str, limit: int = 50) -> list[dict]:
     """Latest `limit` events of one session's history, summarised."""
-    if not _SESSION_NAME.match(name):
+    if not _is_session_name(name):
         raise ValueError(f"invalid session name: {name!r}")
     path = os.path.join(history_dir, f"{name}.jsonl")
     events = collections.deque(maxlen=limit)
@@ -305,16 +326,16 @@ def _endpoints_in_file(path: str, name: str) -> dict:
                 kind = event.get("event_type")
                 if kind == "session_created" and event.get("endpoint"):
                     current = event["endpoint"]
-                    found[current] = {"name": name, "ended": False}
+                    found[current] = {"name": name, "ended": None}
                 elif kind == "session_terminated" and current:
-                    found[current]["ended"] = True
+                    found[current]["ended"] = _epoch(event.get("timestamp")) or time.time()
     except OSError:
         return {}
     return found
 
 
 def history_endpoints(history_dir: str = DEFAULT_HISTORY_DIR) -> dict:
-    """Endpoint -> {"name", "ended"} for every session recorded in history."""
+    """Endpoint -> {"name", "ended"} for every session recorded in history; `ended` is epoch seconds."""
     result: dict = {}
     for name in history_names(history_dir):
         path = os.path.join(history_dir, f"{name}.jsonl")
