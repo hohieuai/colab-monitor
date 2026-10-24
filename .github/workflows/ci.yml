@@ -42,6 +42,10 @@ jobs:
       - run: uv run playwright install chromium
         if: runner.os != 'Linux'
       - run: uv run pytest -ra
+      # Every request path up to a bound against /api/log; see verification/log_access/README.md.
+      - name: Verify that /api/log serves only allowed files
+        if: matrix.python == '3.13'
+        run: uv run python verification/log_access/check.py
 
   package:
     runs-on: ubuntu-latest

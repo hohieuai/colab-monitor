@@ -41,7 +41,8 @@ uv run pytest                      # unit and browser tests
 
 If you change how log files are found, checked, or read (`sources.resolve_log`,
 `sources.discover_logs`, `sources.tail_lines`, or the `/api/log` route), also run the exhaustive
-check of what `/api/log` serves. It takes about 20 seconds and must print `pass` for every property:
+check of what `/api/log` serves. CI runs it too. It takes about 20 seconds and must print `pass` for
+every property:
 
 ```bash
 uv run python verification/log_access/check.py
