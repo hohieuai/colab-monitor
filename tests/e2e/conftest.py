@@ -10,6 +10,7 @@ import time
 
 import pytest
 
+from colab_monitor.poller import ApiPoller
 from colab_monitor.server import Dashboard, make_server
 from colab_monitor.usage_log import UsageLog
 
@@ -53,6 +54,46 @@ def adc_site(tmp_path_factory):
     """A dashboard signed in with Application Default Credentials."""
     app = sample_dashboard(build_data(tmp_path_factory.mktemp("adc")))
     app.auth = "adc"
+    server, url = serve(app)
+    yield url
+    server.shutdown()
+
+
+@pytest.fixture(scope="session")
+def slow_log_site(tmp_path_factory):
+    """Answers /api/log for etl.err two seconds late, to test switching logs mid-request."""
+    app = sample_dashboard(build_data(tmp_path_factory.mktemp("slow")))
+
+    class SlowLogs:
+        def handle(self, path, query):
+            if path == "/api/log" and query.get("path", "").endswith("etl.err"):
+                time.sleep(2)
+            return app.handle(path, query)
+
+    server, url = serve(SlowLogs())
+    yield url
+    server.shutdown()
+
+
+@pytest.fixture(scope="session")
+def small_range_site(tmp_path_factory):
+    """Two hours at 0.08 units an hour, the usage of one CPU machine."""
+    root = tmp_path_factory.mktemp("small")
+    (root / "history").mkdir()
+    (root / "runs").mkdir()
+    usage = UsageLog(str(root / "usage.jsonl"))
+    now = time.time()
+    for i in range(25):
+        usage.append({"balance": 812.5 - i * 0.0067, "rate_per_hour": 0.08}, now=now - 7200 + i * 300)
+    poller = ApiPoller(lambda: {"balance": 812.34, "rate_per_hour": 0.08}, list, interval=60)
+    poller.poll_once()
+    app = Dashboard(
+        poller,
+        sessions_path=str(root / "sessions.json"),
+        history_dir=str(root / "history"),
+        log_dirs=[str(root / "runs")],
+        usage_log=usage,
+    )
     server, url = serve(app)
     yield url
     server.shutdown()
