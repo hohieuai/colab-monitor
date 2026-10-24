@@ -25,6 +25,12 @@
     if (text != null) node.textContent = text;
     return node;
   };
+  // Lists are rebuilt on every refresh; put keyboard focus back on the item with the same data-key.
+  const replaceKeepingFocus = (container, children) => {
+    const key = container.contains(document.activeElement) ? document.activeElement.dataset.key : undefined;
+    container.replaceChildren(...children);
+    if (key !== undefined) [...container.querySelectorAll("[data-key]")].find((n) => n.dataset.key === key)?.focus();
+  };
   const icon = (html) => { const s = document.createElement("span"); s.innerHTML = html; return s.firstChild; };
   const fmt = (n, d = 2) => (n == null || Number.isNaN(n) ? "–" : Number(n).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d }));
   const rel = (ms) => {
@@ -268,7 +274,7 @@
       return;
     }
     const newest = [...jobs].sort((a, b) => (a.silent_s ?? Infinity) - (b.silent_s ?? Infinity)).slice(0, 6);
-    list.replaceChildren(...newest.map((j) => {
+    replaceKeepingFocus(list, newest.map((j) => {
       const pct = j.progress != null ? Math.floor(j.progress * 100) : null;  // rounded down, like tqdm
       const readings = [j.speed, ...Object.entries(j.metrics ?? {}).slice(0, 3).map(([k, v]) => `${k} ${String(Number(Number(v).toPrecision(4)))}`)];
       const facts = [
@@ -276,7 +282,7 @@
         ...(pct == null && !readings.some(Boolean) ? ["No progress printed yet"] : readings),
         j.silent_s != null && !j.stalled && `updated ${j.silent_s < 5 ? "just now" : `${dur(j.silent_s)} ago`}`,
       ].filter(Boolean);
-      const name = el("a", { className: "job-name", href: "#/logs", textContent: j.name, title: tildify(j.path) });
+      const name = el("a", { className: "job-name", href: "#/logs", textContent: j.name, title: tildify(j.path), dataset: { key: j.path } });
       name.addEventListener("click", () => openLog(j.path));
       return el("li", { dataset: { job: j.name } },
         el("span", { className: `ev-icon ${j.last_error ? "bad" : j.stalled ? "" : "run"}` }, icon(j.last_error ? ICON.err : ICON.file)),
@@ -430,6 +436,9 @@
     if (measure === "rate") lo = 0;
     if (hi - lo < 1e-9) { hi += 1; lo = measure === "rate" ? 0 : lo - 1; }
     const step = niceStep(hi - lo, 4);
+    // As many decimals as the step needs: 0.02 needs 2, 2.5 needs 1, 5 needs none.
+    let places = 0;
+    while (places < 6 && Math.abs(step * 10 ** places - Math.round(step * 10 ** places)) > 1e-6) places++;
     lo = Math.floor(lo / step) * step; hi = Math.ceil(hi / step) * step;
     const X = (t) => m.l + ((t - x0) / (x1 - x0)) * iw;
     const Y = (v) => m.t + ih - ((v - lo) / (hi - lo)) * ih;
@@ -439,7 +448,7 @@
     for (let v = lo; v <= hi + step / 2; v += step) {
       const y = Math.round(Y(v)) + 0.5;
       grid.append(sv("line", { x1: m.l, x2: m.l + iw, y1: y, y2: y }));
-      axis.append(sv("text", { x: m.l - 10, y: y + 4, "text-anchor": "end" }, step < 1 ? v.toFixed(1) : Math.round(v).toLocaleString()));
+      axis.append(sv("text", { x: m.l - 10, y: y + 4, "text-anchor": "end" }, v.toLocaleString(undefined, { minimumFractionDigits: places, maximumFractionDigits: places })));
     }
     const ticks = Math.max(2, Math.min(6, Math.floor(iw / 120)));
     for (let i = 0; i <= ticks; i++) {
@@ -604,8 +613,8 @@
         el("div", { className: "empty-desc", textContent: `Send a job's output to ${dirs[0] ?? "~/colab-runs"}.` })));
       return;
     }
-    pane.replaceChildren(...state.logs.map((l) => {
-      const b = el("button", { type: "button", attrs: { "aria-current": String(l.path === selectedLog) } },
+    replaceKeepingFocus(pane, state.logs.map((l) => {
+      const b = el("button", { type: "button", dataset: { key: l.path }, attrs: { "aria-current": String(l.path === selectedLog) } },
         el("div", { className: "pl-title", textContent: l.name }),
         el("div", { className: "pl-meta", textContent: l.exists ? `${bytes(l.size)} · ${rel(l.mtime * 1000)}` : "missing" }));
       b.addEventListener("click", () => {
@@ -667,14 +676,17 @@
       file.replaceChildren(el("span", { className: "dir", textContent: `${shortDir(selectedLog.slice(0, cut))}/` }), selectedLog.slice(cut));
     } else file.textContent = "No log selected";
     if (!selectedLog) { logLines = []; paintLog(); return; }
+    const requested = selectedLog;
     try {
-      const data = await getJSON(`/api/log?lines=2000&path=${encodeURIComponent(selectedLog)}`);
+      const data = await getJSON(`/api/log?lines=2000&path=${encodeURIComponent(requested)}`);
+      if (requested !== selectedLog) return;  // another log was chosen while this one loaded
       const key = selectedLog + "\n" + data.lines.join("\n");
       if (key === logKey && !forceBottom) { logStatusRight(); return; }
       logKey = key;
       logLines = data.lines;
       paintLog(forceBottom);
     } catch (e) {
+      if (requested !== selectedLog) return;
       $("log-view").replaceChildren(el("div", { className: "term-empty", textContent: `Could not read log (${e.message}).` }));
       logKey = null;
     }
@@ -704,7 +716,11 @@
   });
   $("log-download").addEventListener("click", () => {
     if (!selectedLog) return;
-    const a = el("a", { href: URL.createObjectURL(new Blob([logLines.join("\n") + "\n"], { type: "text/plain" })), download: selectedLog.split("/").pop() });
+    // The page holds only the end of the file, so the download says so in its name.
+    const name = selectedLog.split("/").pop();
+    const dot = name.lastIndexOf(".");
+    const tail = dot > 0 ? `${name.slice(0, dot)}-tail${name.slice(dot)}` : `${name}-tail`;
+    const a = el("a", { href: URL.createObjectURL(new Blob([logLines.join("\n") + "\n"], { type: "text/plain" })), download: tail });
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   });
@@ -719,9 +735,9 @@
       return;
     }
     const byName = Object.fromEntries(state.sessions.filter((s) => s.name).map((s) => [s.name, s]));
-    pane.replaceChildren(...state.history.map((name) => {
+    replaceKeepingFocus(pane, state.history.map((name) => {
       const s = byName[name];
-      const b = el("button", { type: "button", attrs: { "aria-current": String(name === selectedHistory) } },
+      const b = el("button", { type: "button", dataset: { key: name }, attrs: { "aria-current": String(name === selectedHistory) } },
         el("div", { className: "pl-title", textContent: name }),
         el("div", { className: "pl-meta", textContent: s && LIVE.has(s.status) ? `${STATUS[s.status][0]} · ${hardware(s)}` : "Ended" }));
       b.addEventListener("click", () => {
@@ -739,8 +755,10 @@
       list.replaceChildren(el("li", { className: "empty" }, el("div", { className: "empty-title", textContent: "No history yet" }), el("div", { className: "empty-desc", textContent: "Sessions appear here after you use the colab CLI." })));
       return;
     }
+    const requested = selectedHistory;
     try {
-      const data = await getJSON(`/api/history?limit=100&session=${encodeURIComponent(selectedHistory)}`);
+      const data = await getJSON(`/api/history?limit=100&session=${encodeURIComponent(requested)}`);
+      if (requested !== selectedHistory) return;  // another session was chosen while this one loaded
       const key = selectedHistory + JSON.stringify(data.events);
       if (key === historyKey) return;
       historyKey = key;

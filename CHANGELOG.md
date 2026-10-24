@@ -45,6 +45,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- Keyboard focus stays on the focused log, session, or job when the page refreshes.
+- Switching logs or sessions while one is loading no longer shows the previous one's lines.
+- The usage chart's axis labels are distinct for small ranges, such as one CPU machine's rate.
+- **Download** on the **Logs** page names the file `NAME-tail.log`, since it holds the lines shown.
 - A long progress bar no longer empties the **Logs** page or hides a job's progress once its output
   exceeds the 256 KB read window.
 - Session names with spaces or other characters that the `colab` CLI accepts work on the **History**

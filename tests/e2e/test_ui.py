@@ -353,7 +353,7 @@ def test_copy_and_download(page, site):
     assert "Tesla T4" in page.evaluate("navigator.clipboard.readText()")
     with page.expect_download() as download:
         page.click("#log-download")
-    assert download.value.suggested_filename == "train-gpu.log"
+    assert download.value.suggested_filename == "train-gpu-tail.log"
 
 
 # ---------- History ----------
@@ -598,3 +598,37 @@ def test_log_list_order_is_stable(page, site, data):
         f.write("one more line\n")
     page.wait_for_timeout(3500)
     assert page.locator("#log-list .pl-title").all_inner_texts() == before
+
+
+# ---------- Review findings ----------
+
+
+@pytest.mark.parametrize(
+    ("route", "selector"), [("logs", "#log-list button"), ("history", "#history-list-pane button")]
+)
+def test_keyboard_focus_survives_a_refresh(page, site, route, selector):
+    open_route(page, site, route, selector)
+    item = page.locator(selector).nth(1)
+    name = item.locator(".pl-title").inner_text()
+    item.focus()
+    page.wait_for_timeout(3500)  # the page refreshes every 3 seconds
+    focused = page.evaluate("document.activeElement?.querySelector('.pl-title')?.textContent")
+    assert focused == name
+
+
+def test_a_late_answer_for_the_previous_log_is_ignored(page, slow_log_site):
+    _open_log(page, slow_log_site, "train-gpu.log")
+    expect(page.locator("#log-view")).to_contain_text("loss", timeout=8000)
+    page.locator("#log-list button", has_text="etl.err").click()
+    page.locator("#log-list button", has_text="train-gpu.log").click()
+    page.wait_for_timeout(2500)  # the etl.err answer arrives after the switch back
+    expect(page.locator("#term-file")).to_contain_text("train-gpu.log")
+    assert "etl starting" not in page.inner_text("#log-view")
+
+
+def test_y_axis_labels_are_distinct_for_small_ranges(page, small_range_site):
+    open_route(page, small_range_site, "overview", "#chart .chart-line")
+    for measure in ("rate", "balance"):
+        page.click(f'#measure-seg [data-measure="{measure}"]')
+        labels = page.locator('#chart .chart-axis text[text-anchor="end"]').all_text_contents()
+        assert len(labels) >= 3 and len(set(labels)) == len(labels), (measure, labels)
