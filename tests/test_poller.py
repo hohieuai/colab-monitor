@@ -3,7 +3,9 @@ import pytest
 from colab_monitor.poller import ApiPoller
 
 
-class FakeClock:
+class MockClock:
+    """A clock that moves only when a test sets ``now``."""
+
     def __init__(self):
         self.now = 1000.0
 
@@ -16,7 +18,7 @@ def test_success_stores_snapshot():
         fetch_usage=lambda: {"balance": 199.7},
         fetch_assignments=lambda: [{"endpoint": "e1"}],
         interval=60,
-        clock=FakeClock(),
+        clock=MockClock(),
     )
     poller.poll_once()
     snap = poller.snapshot()
@@ -40,7 +42,7 @@ def test_failure_keeps_last_good_data_and_backs_off():
         fetch_assignments=list,
         interval=60,
         max_interval=200,
-        clock=FakeClock(),
+        clock=MockClock(),
     )
     poller.poll_once()
     poller.poll_once()
@@ -61,7 +63,7 @@ def test_recovery_resets_interval():
             raise RuntimeError("boom")
         return {}
 
-    poller = ApiPoller(usage, list, interval=60, clock=FakeClock())
+    poller = ApiPoller(usage, list, interval=60, clock=MockClock())
     poller.poll_once()
     assert poller.snapshot()["interval"] == 120
     state["fail"] = False
@@ -72,7 +74,7 @@ def test_recovery_resets_interval():
 
 
 def test_next_poll_countdown():
-    clock = FakeClock()
+    clock = MockClock()
     poller = ApiPoller(dict, list, interval=60, clock=clock)
     poller.poll_once()
     clock.now += 15
@@ -88,7 +90,7 @@ def test_on_sample_called_only_on_success():
             raise RuntimeError("boom")
         return {"balance": 5.0}
 
-    poller = ApiPoller(usage, list, interval=60, clock=FakeClock(), on_sample=seen.append)
+    poller = ApiPoller(usage, list, interval=60, clock=MockClock(), on_sample=seen.append)
     poller.poll_once()
     state["fail"] = True
     poller.poll_once()
@@ -99,7 +101,7 @@ def test_on_sample_errors_do_not_break_polling():
     def explode(_):
         raise OSError("disk full")
 
-    poller = ApiPoller(dict, list, interval=60, clock=FakeClock(), on_sample=explode)
+    poller = ApiPoller(dict, list, interval=60, clock=MockClock(), on_sample=explode)
     poller.poll_once()
     assert poller.snapshot()["error"] is None
     assert poller.snapshot()["usage"] == {}

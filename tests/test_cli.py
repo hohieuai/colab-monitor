@@ -51,7 +51,7 @@ class TestDispatch:
     def test_routes_to_the_command(self, monkeypatch, argv, command, rest):
         called = {}
 
-        def fake(name):
+        def mock_command(name):
             def run(args):
                 called[name] = args
                 return 0
@@ -59,7 +59,7 @@ class TestDispatch:
             return run
 
         for name in ("serve", "status", "watch"):
-            monkeypatch.setitem(cli.COMMANDS, name, fake(name))
+            monkeypatch.setitem(cli.COMMANDS, name, mock_command(name))
         assert cli.main(argv) == 0
         assert called == {command: rest}
 
