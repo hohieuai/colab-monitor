@@ -84,7 +84,8 @@ machine that runs a command has no idle time. An orphan has no history, so its u
 
 Machine hours add up, for each kind of hardware, the time each session ran in the last 7 days, from
 its start to its end or to now. Run counts come from the code runs in the CLI's history. A run fails
-when its output has an error.
+when its output has an error. A script that ends with `sys.exit()` or `sys.exit(0)` succeeded, as the
+`colab` CLI also treats it.
 
 ## What a job's log tells the dashboard
 
@@ -93,16 +94,19 @@ Colab Monitor reads the last 200 lines of each log file:
 - **Progress** comes from the last progress line: a tqdm bar such as `45/100 [00:30<00:37, 1.5it/s]`,
   or `step 900/1800`, or `epoch 3/10`. A tqdm bar also gives the time left and the speed. For a
   `step` or `epoch` line, the time left comes from the steps left and the speed on the line.
-- **Metrics** are the latest numbers written as `name=value`, `name: value`, or a known name such as
-  `loss 0.25`. Counters like `step` and `epoch`, one-letter names, percentages, and lines with an
-  error are skipped. At most 8 metrics are kept.
-- **Last error** is the last line that contains `error`, `exception`, `traceback`, `failed`, or
-  `out of memory`.
+- **Metrics** are the latest numbers written as `name=value`, `name: value`, a quoted key as in
+  Hugging Face's `{'loss': 0.41}` or JSON, or a known name such as `loss 0.25`. Counters like `step`
+  and `epoch`, one-letter names, numbers with a unit such as `15.2GB`, percentages, and lines with
+  an error are skipped. At most 8 metrics are kept.
+- **Last error** is the last line with a Python exception such as `ValueError:`, a traceback,
+  `out of memory`, or a line that starts with `error`, `fatal`, or `failed`. Metric names such as
+  `val_error` don't count.
 
 A log belongs to a machine when its name, without the extension, is the machine's session name or
 starts with it followed by `-`, `_`, or `.`. For example, `train-gpu.log` and `train-gpu-run2.log`
 belong to `train-gpu`. A job is **stalled** when its machine runs a command and the log has not
-changed for longer than the stall threshold. A stalled job often means a hung process, but a job
+changed for longer than the stall threshold. Only the machine's newest log can be stalled, because
+older logs with the same session name come from earlier runs. A stalled job often means a hung process, but a job
 that prints rarely, such as a long evaluation, looks the same.
 
 ## When something needs attention

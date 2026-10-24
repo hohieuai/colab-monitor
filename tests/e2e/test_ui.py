@@ -326,6 +326,18 @@ def test_new_log_lines_appear_live(page, site, data):
     expect(page.locator("#log-view")).to_contain_text("shard 01/40", timeout=8000)
 
 
+def test_only_real_errors_are_highlighted(page, site, data):
+    _open_log(page, site, "etl.err")
+    with open(data["runs"] / "etl.err", "a") as f:
+        f.write("loss: 0.07 - mean_absolute_error: 0.20 - val_error=0.08\n")
+        f.write("KeyError: 'price'\n")
+    expect(page.locator("#log-view")).to_contain_text("KeyError", timeout=8000)
+    metric = page.locator("#log-view .tl", has_text="mean_absolute_error")
+    error = page.locator("#log-view .tl", has_text="KeyError")
+    assert "err" not in metric.get_attribute("class").split()
+    assert "err" in error.get_attribute("class").split()
+
+
 def test_copy_and_download(page, site):
     _open_log(page, site, "train-gpu.log")
     page.click("#log-copy")

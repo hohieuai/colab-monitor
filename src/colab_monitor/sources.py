@@ -19,12 +19,26 @@ MAX_CODE_CHARS = 2_000
 MAX_OUTPUT_CHARS = 4_000
 
 _SESSION_NAME = re.compile(r"^[A-Za-z0-9._-]+$")
-# Terminal colour and cursor codes (Python tracebacks from Colab are full of them).
-_ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07]*\x07")
+# Terminal escape codes: colours and cursor moves (Python tracebacks from Colab are full of them),
+# window titles and links ended by BEL or ESC \, and two-character codes such as a reset (ESC c).
+_ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-~]")
 
 
 def strip_ansi(text: str) -> str:
     return _ANSI.sub("", text)
+
+
+def _json_objects(lines):
+    """The JSON objects among `lines`. Blank lines, broken JSON, and other JSON values are skipped."""
+    for line in lines:
+        if not line.strip():
+            continue
+        try:
+            value = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(value, dict):
+            yield value
 
 
 # Expanded when used, not at import, so a changed HOME (tests, sandboxes) is respected.
@@ -216,7 +230,7 @@ def _truncate(text: str, limit: int) -> str:
 def summarize_event(event: dict) -> dict:
     """Small, display-ready form of one history event (images are counted, not sent)."""
     summary = {
-        "timestamp": event.get("timestamp"),
+        "timestamp": event.get("timestamp") if isinstance(event.get("timestamp"), str) else None,
         "type": event.get("event_type"),
     }
     if "code" in event:
@@ -261,12 +275,7 @@ def read_history(history_dir: str, name: str, limit: int = 50) -> list[dict]:
     events = collections.deque(maxlen=limit)
     try:
         with open(path, encoding="utf-8") as f:
-            for line in f:
-                if line.strip():
-                    try:
-                        events.append(json.loads(line))
-                    except json.JSONDecodeError:
-                        continue
+            events.extend(_json_objects(f))
     except OSError:
         return []
     return [summarize_event(e) for e in events]
@@ -291,13 +300,8 @@ def _endpoints_in_file(path: str, name: str) -> dict:
     current = None
     try:
         with open(path, encoding="utf-8") as f:
-            for line in f:
-                if '"session_' not in line:
-                    continue  # skip big execution events without parsing them
-                try:
-                    event = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
+            # Only session events matter here, so big execution events are skipped unparsed.
+            for event in _json_objects(line for line in f if '"session_' in line):
                 kind = event.get("event_type")
                 if kind == "session_created" and event.get("endpoint"):
                     current = event["endpoint"]
@@ -329,17 +333,27 @@ def history_endpoints(history_dir: str = DEFAULT_HISTORY_DIR) -> dict:
     return result
 
 
-def _epoch(timestamp: str | None) -> float | None:
+def _epoch(timestamp) -> float | None:
+    if not isinstance(timestamp, str):
+        return None
     try:
-        return datetime.datetime.fromisoformat(timestamp).timestamp() if timestamp else None
+        return datetime.datetime.fromisoformat(timestamp).timestamp()
     except ValueError:
         return None
+
+
+# sys.exit(), sys.exit(None) and sys.exit(0) end a run successfully, as the colab CLI treats them.
+_CLEAN_EXITS = frozenset({"", "None", "0"})
 
 
 def _error_text(outputs) -> str | None:
     for out in outputs if isinstance(outputs, list) else []:
         if isinstance(out, dict) and out.get("output_type") == "error":
-            return strip_ansi(f"{out.get('ename', 'Error')}: {out.get('evalue', '')}")
+            ename = strip_ansi(str(out.get("ename", "Error")))
+            evalue = strip_ansi(str(out.get("evalue", "")))
+            if ename == "SystemExit" and evalue in _CLEAN_EXITS:
+                continue
+            return f"{ename}: {evalue}"
     return None
 
 
@@ -349,11 +363,7 @@ def _timelines_in_file(path: str, name: str) -> dict:
     current = None
     try:
         with open(path, encoding="utf-8") as f:
-            for line in f:
-                try:
-                    event = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
+            for event in _json_objects(f):
                 t = _epoch(event.get("timestamp"))
                 kind = event.get("event_type")
                 if t is None:

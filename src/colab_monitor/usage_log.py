@@ -52,7 +52,7 @@ class UsageLog:
                         p = json.loads(line)
                     except json.JSONDecodeError:
                         continue
-                    if not isinstance(p, dict) or not {"t", "balance", "rate"} <= p.keys():
+                    if not isinstance(p, dict) or not all(_is_number(p.get(k)) for k in _FIELDS):
                         continue
                     points.append(p)
         except OSError:
@@ -68,6 +68,13 @@ class UsageLog:
             with open(tmp, "w", encoding="utf-8") as f:
                 f.writelines(json.dumps(p) + "\n" for p in keep)
             os.replace(tmp, self.path)
+
+
+_FIELDS = ("t", "balance", "rate")
+
+
+def _is_number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
 def downsample(points: list[dict], max_points: int) -> list[dict]:

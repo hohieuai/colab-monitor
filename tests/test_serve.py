@@ -117,3 +117,10 @@ class TestSeveralConfigs:
         app = server.Dashboard(None, sessions_path=[str(a), str(b)], history_dir=str(tmp_path))
         _, body = app.handle("/api/state", {})
         assert body["config"]["sessions_paths"] == [str(a), str(b)]
+
+
+@pytest.mark.parametrize("value", ["inf", "nan", "0"])
+def test_alert_options_must_be_finite_positive_numbers(value, capsys):
+    with pytest.raises(SystemExit) as exit_info:
+        server._parse_args(["--idle-alert", value])
+    assert exit_info.value.code == 2 and "positive number" in capsys.readouterr().err
