@@ -30,8 +30,10 @@ A machine's status comes from comparing Colab's list of machines with the CLI's 
   `colab run` or `colab exec`.
 - **Idle** means that Colab lists the machine and the CLI knows it, but nothing runs in it. An idle
   machine still uses compute units.
-- **Stopping** means that the CLI stopped the machine a moment ago, but the last Colab check still
-  listed it. The machine disappears after the next check.
+- **Stopping** means that the CLI stopped the machine in the last 10 minutes, but the last Colab
+  check still listed it. The machine usually disappears after the next check. If Colab still lists
+  it 10 minutes after the stop, it shows as an **Orphan**, because the CLI records a stop even when
+  Colab refused to release the machine, and that machine keeps billing.
 - **Orphan** means that Colab lists the machine but the CLI has no record of it. This happens when
   the CLI crashes or uses a different state file. Nothing will stop an orphan for you, so the
   dashboard shows a red notice until you release it.

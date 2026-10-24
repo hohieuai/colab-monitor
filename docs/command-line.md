@@ -165,7 +165,7 @@ The API returns one of these values for each session. The page shows the label.
 |---|---|---|
 | `busy` | Running | Colab lists the machine, and the CLI is running a command in it. |
 | `idle` | Idle | Colab lists the machine, and the CLI knows it but runs nothing in it. |
-| `stopping` | Stopping | The CLI stopped the machine, and the last Colab check still listed it. |
+| `stopping` | Stopping | The CLI stopped the machine in the last 10 minutes, and the last Colab check still listed it. Still listed after 10 minutes, it becomes `orphan`. |
 | `orphan` | Orphan | Colab lists the machine, and the CLI has no record of it. |
 | `gone` | Released | The CLI has a record of the machine, and Colab no longer lists it. |
 | `unknown` | Unknown | Colab has not been checked yet. |

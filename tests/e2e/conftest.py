@@ -49,6 +49,16 @@ def stalled_site(tmp_path_factory):
 
 
 @pytest.fixture(scope="session")
+def adc_site(tmp_path_factory):
+    """A dashboard signed in with Application Default Credentials."""
+    app = sample_dashboard(build_data(tmp_path_factory.mktemp("adc")))
+    app.auth = "adc"
+    server, url = serve(app)
+    yield url
+    server.shutdown()
+
+
+@pytest.fixture(scope="session")
 def empty_site(tmp_path_factory):
     root = tmp_path_factory.mktemp("empty")
     (root / "history").mkdir()

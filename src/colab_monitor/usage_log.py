@@ -13,6 +13,7 @@ import time
 
 DEFAULT_PATH = os.path.expanduser("~/.config/colab-monitor/usage.jsonl")
 RETENTION_SECONDS = 30 * 86400
+PRUNE_EVERY_SECONDS = 86400
 
 
 class UsageLog:
@@ -21,6 +22,7 @@ class UsageLog:
         self._lock = threading.Lock()
         # (mtime_ns, size, samples): the dashboard reads every few seconds, the file changes each minute.
         self._cache: tuple[int, int, list[dict]] | None = None
+        self._pruned_at: float | None = None
 
     def append(self, usage: dict, now: float | None = None) -> None:
         sample = {
@@ -32,6 +34,10 @@ class UsageLog:
             os.makedirs(os.path.dirname(self.path), exist_ok=True)
             with open(self.path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(sample) + "\n")
+        # Prune about once a day, so a dashboard that runs for months keeps only 30 days of samples.
+        if self._pruned_at is None or sample["t"] - self._pruned_at >= PRUNE_EVERY_SECONDS:
+            self.prune(before=sample["t"] - RETENTION_SECONDS)
+            self._pruned_at = sample["t"]
 
     def read(self, since: float | None = None) -> list[dict]:
         try:

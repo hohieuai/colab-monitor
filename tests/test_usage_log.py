@@ -82,3 +82,14 @@ def test_samples_with_wrong_types_are_skipped(tmp_path):
         + "\n"
     )
     assert UsageLog(str(path)).read() == [{"t": 3.0, "balance": 5.0, "rate": 1.0}]
+
+
+def test_old_samples_are_pruned_while_the_dashboard_runs(tmp_path):
+    from colab_monitor.usage_log import RETENTION_SECONDS
+
+    log = UsageLog(str(tmp_path / "usage.jsonl"))
+    start = 1_800_000_000.0
+    log.append({"balance": 10.0, "rate_per_hour": 1.0}, now=start)
+    later = start + RETENTION_SECONDS + 2 * 86400
+    log.append({"balance": 9.0, "rate_per_hour": 1.0}, now=later)
+    assert [p["t"] for p in log.read()] == [later]

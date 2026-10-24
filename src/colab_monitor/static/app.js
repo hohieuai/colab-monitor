@@ -253,6 +253,9 @@
     $("attention-list").replaceChildren(...items.map((a) => el("li", { dataset: { kind: a.kind } },
       el("span", { className: `sev ${a.severity}` }), el("span", { textContent: a.message }))));
     $("orphan-hint").hidden = !items.some((a) => a.kind === "orphan");
+    // The colab CLI signs in with OAuth unless told otherwise; with ADC, the plain command would wait for a code.
+    const adc = state.config.auth === "adc";
+    $("orphan-command").textContent = `uvx --from google-colab-cli python -c "${adc ? "from colab_cli.auth import AuthProvider; " : ""}from colab_cli.common import state; ${adc ? "state.auth_provider = AuthProvider.ADC; " : ""}state.client.unassign('ENDPOINT')"`;
   }
 
   const openLog = (path) => { selectedLog = path; store.set("log", path); };

@@ -375,6 +375,7 @@ def finish_args(p: argparse.ArgumentParser, args: argparse.Namespace) -> argpars
         args.log_dir = [DEFAULT_LOG_DIR]
     args.config = [os.path.expanduser(c) for c in (args.config or [sources.DEFAULT_SESSIONS_PATH])]
     args.log_dir = [os.path.expanduser(d) for d in args.log_dir]
+    args.history_dir = os.path.expanduser(args.history_dir)
     return args
 
 

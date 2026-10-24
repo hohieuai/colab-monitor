@@ -164,7 +164,7 @@ for a in r["attention"]:
 |---|---|---|
 | `busy` | The CLI is running a command in the machine. | Wait, or read its log. |
 | `idle` | The machine runs and bills, but nothing runs in it. | If its work is done, stop it with `colab stop -s NAME`. |
-| `stopping` | The CLI stopped it, and the last Colab check still listed it. | Nothing. It disappears after the next check. |
+| `stopping` | The CLI stopped it in the last 10 minutes, and the last Colab check still listed it. | Nothing. It usually disappears after the next check; if it is still listed after 10 minutes, it shows as `orphan`. |
 | `orphan` | The machine bills, but the CLI has no record of it. | Tell the user. Release it only with their approval (see **Recovery**). |
 | `unknown` | Colab hasn't been checked yet. | Wait one interval and check again. |
 
@@ -207,7 +207,7 @@ kill $(lsof -t -iTCP:26522 -sTCP:LISTEN)
 | `colab-monitor: error: unrecognized arguments` | The installed copy is older than this skill. Run `uv tool install --reinstall git+https://github.com/hohieuai/colab-monitor`, then the setup block. |
 | Your own machines show as `orphan` | You started them with `colab --config FILE`. Stop the dashboard and start it again with `--config ~/.config/colab-cli/sessions.json --config FILE`. |
 | A job is missing from the **Logs** page | Its output isn't in a `.log`, `.out`, or `.err` file directly inside `~/colab-runs`. Redirect it there. |
-| A machine is `orphan` and the user approves releasing it | `uvx --from google-colab-cli python -c "from colab_cli.common import state; state.client.unassign('ENDPOINT')"`, using the machine's `endpoint`. Then confirm with `colab sessions`. |
+| A machine is `orphan` and the user approves releasing it | `uvx --from google-colab-cli python -c "from colab_cli.common import state; state.client.unassign('ENDPOINT')"`, using the machine's `endpoint`. With `AUTH=adc`, run `uvx --from google-colab-cli python -c "from colab_cli.auth import AuthProvider; from colab_cli.common import state; state.auth_provider = AuthProvider.ADC; state.client.unassign('ENDPOINT')"` instead, or the command waits for an OAuth code. Then confirm with `colab sessions`. |
 
 More detail: [command-line reference](../../docs/command-line.md) and
 [how Colab Monitor works](../../docs/how-it-works.md).
