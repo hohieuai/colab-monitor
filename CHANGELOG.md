@@ -38,6 +38,8 @@ All notable changes to this project are documented here. The format follows
   releases an orphan.
 - A new icon, `[*]`: the mark a notebook shows next to a cell that is running.
 - The agent skill reads `colab-monitor status --json` instead of calling the HTTP API.
+- Every `colab run` and `colab exec` example, and the agent skill, pass `--timeout 86400`, so the
+  CLI waits for long jobs without keeping a CPU core busy.
 
 ## [0.1.0] - 2026-10-24
 
