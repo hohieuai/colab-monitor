@@ -4,7 +4,7 @@ dynamic = ["version"]
 description = "A local web dashboard for watching the Colab sessions you run with the colab CLI."
 readme = "README.md"
 license = "Apache-2.0"
-license-files = ["LICENSE", "NOTICE", "src/colab_monitor/static/fonts/OFL.txt"]
+license-files = ["LICENSE", "NOTICE", "AUTHORS", "src/colab_monitor/static/fonts/OFL.txt"]
 authors = [{ name = "hohieuai" }]
 requires-python = ">=3.12"
 dependencies = ["google-colab-cli>=0.7.5"]
