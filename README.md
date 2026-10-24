@@ -92,10 +92,10 @@ Usage          13.61/h
 Runway         2.5 days  until Mon 14:38
 Spent          37.43 today · 45.46 in 7 days · 45.46 in 30 days
 
-MACHINE          STATUS   HARDWARE       UPTIME  IDLE      RATE  JOB
-data-prep        running  CPU            9 h     -      ≈0.08/h  run(tokenize.py)
-eval-sweep       running  T4             6 h     -      ≈1.76/h  run(eval.py)
-llama3-finetune  running  A100 High-RAM  3 h     -     ≈11.77/h  run(train.py)
+MACHINE          STATUS   HARDWARE       UPTIME  IDLE  RATE               JOB
+data-prep        running  CPU            9 h     -      0.08/h estimated  run(tokenize.py)
+eval-sweep       running  T4             6 h     -      1.76/h estimated  run(eval.py)
+llama3-finetune  running  A100 High-RAM  3 h     -     11.77/h estimated  run(train.py)
 
 JOBS
 data-prep.log        62%  ETA 5 min  · on data-prep, updated just now
@@ -108,8 +108,9 @@ Machine hours (7 days): A100 3.0, CPU 9.0, T4 6.0
 Nothing needs attention.
 ```
 
-A `≈` marks an estimate. Colab reports one rate for the whole account, and Colab Monitor splits it
-by machine. `colab-monitor watch` keeps the summary on screen and redraws it every 5 seconds.
+Colab reports one rate for the whole account, and Colab Monitor splits it by machine. A rate split
+this way is labeled "estimated". `colab-monitor watch` keeps the summary on screen and redraws it
+every 5 seconds.
 
 For scripts and agents, `colab-monitor status --json` prints the same report as JSON, and
 `--exit-code` exits with status 3 when something needs attention. `status` and `watch` read a

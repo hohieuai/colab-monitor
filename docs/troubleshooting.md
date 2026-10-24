@@ -78,12 +78,13 @@ chooses files, such as `--config` or `--log-dir`, they read the files themselves
 
 To read another dashboard, pass its port with `--port`.
 
-## Understand a machine rate marked with ≈ or shown as –
+## Understand a machine rate labeled Estimated or shown as –
 
-Colab reports one usage rate for the whole account. A rate marked with `≈` is an estimate for one
-machine, worked out from the rise in the account's rate when the machine started. A `–` means that
-Colab Monitor could not tell the machines apart, for example because the dashboard was off when the
-machine started. [How Colab Monitor works](how-it-works.md#what-a-machine-costs) lists every case.
+Colab reports one usage rate for the whole account. A rate labeled "Estimated" is an estimate for
+one machine, worked out from the rise in the account's rate when the machine started. A `–` means
+that Colab Monitor could not tell the machines apart, for example because the dashboard was off when
+the machine started. [How Colab Monitor works](how-it-works.md#what-a-machine-costs) lists every
+case.
 
 To get estimates for the machines you start next, keep the dashboard running while they start.
 

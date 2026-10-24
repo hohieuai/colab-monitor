@@ -165,12 +165,15 @@ class TestRender:
         assert "\x1b[31m" in text  # red for the orphan
         assert "\x1b[32m" in text  # green for running
 
-    def test_estimated_rates_are_marked(self):
+    def test_estimated_rates_are_labelled(self):
         report = _minimal_report(
             machines=[_machine(rate=11.77, estimated=True), _machine(name="b", rate=1.76, estimated=False)]
         )
         text = cli.render(report, width=120, color=False)
-        assert "≈11.77/h" in text and " 1.76/h" in text
+        estimated = next(line for line in text.splitlines() if line.startswith("a "))
+        exact = next(line for line in text.splitlines() if line.startswith("b "))
+        assert "11.77/h estimated" in estimated and "estimated" not in exact and "≈" not in text
+        assert estimated.index("/h") == exact.index("/h")  # the numbers stay aligned
 
     def test_runway_time_and_quiet_state(self, monkeypatch):
         monkeypatch.setenv("TZ", "UTC")

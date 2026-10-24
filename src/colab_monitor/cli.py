@@ -370,10 +370,14 @@ def _clock(epoch: float, now: float) -> str:
     return time.strftime("%a %H:%M", time.localtime(epoch))
 
 
-def _rate(rate: float | None, estimated: bool) -> str:
-    if rate is None:
-        return "-"
-    return f"{'≈' if estimated else ' '}{rate:.2f}/h"
+def _rates(machines: list[dict]) -> list[str]:
+    """The RATE column: numbers aligned on the right, then "estimated" after each estimate."""
+    numbers = ["-" if m["rate"] is None else f"{m['rate']:.2f}/h" for m in machines]
+    width = max(len(n) for n in numbers)
+    return [
+        n.rjust(width) + (" estimated" if m["rate"] is not None and m["rate_estimated"] else "")
+        for n, m in zip(numbers, machines, strict=True)
+    ]
 
 
 def _summary_lines(report: dict, now: float) -> list[Line]:
@@ -414,7 +418,7 @@ MACHINE_COLUMNS = [  # (heading, key, minimum width at which to keep it, right-a
     ("HARDWARE", "hardware", 70, False),
     ("UPTIME", "uptime", 0, False),
     ("IDLE", "idle", 80, False),
-    ("RATE", "rate", 90, True),
+    ("RATE", "rate", 90, False),
     ("JOB", "job", 0, False),
 ]
 
@@ -424,7 +428,7 @@ def _machine_lines(report: dict, width: int) -> list[Line]:
     if not machines:
         return [[("No machines are running.", "dim")]]
     rows = []
-    for m in machines:
+    for m, rate in zip(machines, _rates(machines), strict=True):
         rows.append(
             {
                 "name": m["name"] or m["endpoint"],
@@ -433,7 +437,7 @@ def _machine_lines(report: dict, width: int) -> list[Line]:
                 "hardware": m["hardware"],
                 "uptime": _duration(m["uptime_s"]),
                 "idle": _duration(m["idle_s"]) if m["idle_s"] else "-",
-                "rate": _rate(m["rate"], m["rate_estimated"]),
+                "rate": rate,
                 "job": m["job"] or "-",
             }
         )
