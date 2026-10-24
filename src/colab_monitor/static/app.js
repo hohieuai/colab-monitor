@@ -55,8 +55,10 @@
   const when = (ms) => new Date(ms).toLocaleString(undefined, Math.abs(ms - Date.now()) < 6 * 86400e3
     ? { weekday: "short", hour: "2-digit", minute: "2-digit" }
     : { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-  // Rates split from the account total are estimates: mark them with ≈.
-  const rateText = (m) => (m?.rate == null ? "–" : `${m.rate_estimated ? "≈" : ""}${fmt(m.rate)} / hr`);
+  // Rates split from the account total are estimates, so label them.
+  const estimated = () => el("span", { className: "estimated", textContent: "Estimated", title: "Estimated from the account's usage rate" });
+  const withEstimate = (text, isEstimate) => (isEstimate ? [text, " ", estimated()] : [text]);
+  const rateParts = (m) => (m?.rate == null ? ["–"] : withEstimate(`${fmt(m.rate)} / hr`, m.rate_estimated));
   const bytes = (n) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`);
   const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
   const getJSON = async (url) => {
@@ -233,11 +235,11 @@
         el("div", { className: "grow" },
           el("div", { className: `title${s.name ? "" : " faint"}`, textContent: s.name ?? "Unknown machine" }),
           el("div", { className: "meta", textContent: machineMeta(s) })),
-        s.metrics?.rate != null ? el("span", { className: "rate", textContent: rateText(s.metrics), title: s.metrics.rate_estimated ? "Estimated from the account's usage rate" : "" }) : null,
+        s.metrics?.rate != null ? el("span", { className: "rate" }, ...rateParts(s.metrics)) : null,
         statusPill(s.status))));
     }
     renderJobs(state.insights.jobs);
-    renderSpend(state.insights);
+    renderSpend(state.insights, live);
   }
 
   function machineMeta(s) {
@@ -298,7 +300,7 @@
     }));
   }
 
-  function renderSpend(ins) {
+  function renderSpend(ins, live) {
     const s = ins.spend;
     const hours = Object.entries(ins.machine_hours_7d).sort(([a], [b]) => a.localeCompare(b));
     const runs = ins.runs["24h"];
@@ -306,11 +308,11 @@
       ["Today", fmt(s.today)],
       ["Last 7 days", fmt(s["7d"])],
       ["Last 30 days", fmt(s["30d"])],
-      ["Spent while idle", ins.idle_cost ? `≈${fmt(ins.idle_cost)}` : "–"],
+      ["Spent while idle", ins.idle_cost ? withEstimate(fmt(ins.idle_cost), live.some((s) => s.metrics?.idle_cost && s.metrics.rate_estimated)) : "–"],
       ["Machine hours, 7 days", hours.length ? hours.map(([k, v]) => `${k} ${fmt(v, 1)}`).join(" · ") : "–"],
       ["Runs, 24 hours", runs.ok + runs.failed ? `${runs.ok} finished · ${runs.failed} failed` : "–"],
     ];
-    $("ov-spend").replaceChildren(...rows.flatMap(([k, v]) => [el("dt", { textContent: k }), el("dd", { textContent: v })]));
+    $("ov-spend").replaceChildren(...rows.flatMap(([k, v]) => [el("dt", { textContent: k }), el("dd", {}, ...[v].flat())]));
     // Spend counts only what the dashboard saw, so say when that started.
     const since = s.measured_since;
     $("spend-since").textContent = since && since * 1000 > Date.now() - 29 * 86400e3 ? `Measured since ${when(since * 1000)}` : "";
@@ -570,8 +572,7 @@
         el("td", { className: "meta-cell", dataset: { label: "Hardware" } }, hardware(s) ? el("span", { className: "tag", textContent: hardware(s) }) : "–"),
         el("td", { className: `num meta-cell${s.metrics?.uptime_s != null ? "" : " empty-val"}`, dataset: { label: "Uptime" }, textContent: dur(s.metrics?.uptime_s),
           title: s.metrics?.idle_s ? `Idle for ${dur(s.metrics.idle_s)}` : "" }),
-        el("td", { className: `num meta-cell${s.metrics?.rate != null ? "" : " empty-val"}`, dataset: { label: "Rate" }, textContent: rateText(s.metrics),
-          title: s.metrics?.rate_estimated && s.metrics?.rate != null ? "Estimated from the account's usage rate" : "" }),
+        el("td", { className: `num meta-cell${s.metrics?.rate != null ? "" : " empty-val"}`, dataset: { label: "Rate" } }, ...rateParts(s.metrics)),
         el("td", { className: `job meta-cell${s.running ? "" : " empty-val"}`, dataset: { label: "Job" }, textContent: s.running ?? "–", title: s.running ?? "" }),
         el("td", { className: `sub meta-cell${t ? "" : " empty-val"}`, dataset: { label: "Last run" }, textContent: t ? `${baseName(s.last_execution.source) || "code"} · ${rel(t)}` : "–", title: t ? `${s.last_execution.source ?? ""}\n${s.last_execution.time}` : "" }));
     }));

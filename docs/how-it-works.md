@@ -61,13 +61,13 @@ machines that run now, not for your plans. When nothing uses compute units, ther
 ## What a machine costs
 
 Colab reports one usage rate for the whole account. When only one machine runs, that machine uses
-the whole rate, and the dashboard shows the rate without a mark.
+the whole rate, and the dashboard shows the rate without a label.
 
-With several machines, Colab Monitor estimates each machine's rate and marks it with `≈`. It looks
-at the two usage samples around the time the machine started. The rise in the account's rate between
-them is the machine's rate. For example, if the rate went from 1.76 to 13.53 an hour while an A100
-started, the A100 uses about 11.77 an hour. One machine whose start was not seen, such as an orphan,
-gets what is left of the current rate.
+With several machines, Colab Monitor estimates each machine's rate and labels it "Estimated". It
+looks at the two usage samples around the time the machine started. The rise in the account's rate
+between them is the machine's rate. For example, if the rate went from 1.76 to 13.53 an hour while
+an A100 started, the A100 uses about 11.77 an hour. One machine whose start was not seen, such as an
+orphan, gets what is left of the current rate.
 
 The estimate is left blank when it would be a guess:
 

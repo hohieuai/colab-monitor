@@ -108,7 +108,8 @@ def test_active_machines_show_uptime_idle_and_rate(page, site):
     open_route(page, site, "overview", "#ov-sessions li .meta")
     rows = page.locator("#ov-sessions li")
     gpu = rows.filter(has_text="train-gpu")
-    assert "up 1 h" in gpu.inner_text() and "≈1.41 / hr" in gpu.inner_text()
+    assert "up 1 h" in gpu.inner_text() and "1.41 / hr Estimated" in gpu.inner_text()
+    assert "≈" not in page.inner_text("#ov-sessions")
     assert re.search(r"idle 1[6-9] min", rows.filter(has_text="eval-cpu").inner_text())  # 1000 s + test time
 
 
@@ -133,6 +134,7 @@ def test_spending_card(page, site):
     assert re.fullmatch(r"\d+\.\d\d", values["Last 7 days"])
     assert "T4 1.0" in values["Machine hours, 7 days"] and "CPU" in values["Machine hours, 7 days"]
     assert values["Runs, 24 hours"] == "1 finished · 1 failed"
+    assert re.fullmatch(r"\d+\.\d\d Estimated", values["Spent while idle"])  # eval-cpu's rate is estimated
 
 
 def test_stalled_job_is_flagged(page, stalled_site):
@@ -239,7 +241,7 @@ def test_sessions_uptime_and_rate_columns(page, site):
     assert headers[3:5] == ["Uptime", "Rate"]
     gpu = page.locator("#sessions-body tr", has_text="train-gpu")
     cells = gpu.locator("td").all_inner_texts()
-    assert re.fullmatch(r"1 h( \d+ min)?", cells[3]) and cells[4] == "≈1.41 / hr"
+    assert re.fullmatch(r"1 h( \d+ min)?", cells[3]) and " ".join(cells[4].split()) == "1.41 / hr Estimated"
     idle = page.get_attribute('#sessions-body tr:has-text("eval-cpu") td[data-label="Uptime"]', "title")
     assert re.fullmatch(r"Idle for 1[6-9] min", idle)  # 1000 s, plus the time the run has taken
 

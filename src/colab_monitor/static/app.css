@@ -323,6 +323,7 @@ td { padding: 13px 20px; border-bottom: 1px solid var(--border); white-space: no
 tbody tr:last-child td { border-bottom: none; }
 tbody tr:hover td { background: var(--surface-2); }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+td.num .estimated { display: block; }
 .name { font-weight: 500; }
 .name.unknown > div:first-child { color: var(--muted); font-style: italic; font-weight: 400; }
 .status { display: inline-flex; align-items: center; gap: 8px; height: 24px; padding: 0 10px 0 8px; border-radius: 999px; font-size: 12.5px; font-weight: 500; }
@@ -393,6 +394,7 @@ td.job { max-width: 220px; font: 12.5px var(--mono); color: var(--text-2); }
 .ev-icon.run { color: var(--text); background: var(--surface-2); }
 .time { font-size: 12px; color: var(--muted); white-space: nowrap; }
 .rate { font-size: 12.5px; color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.estimated { font-size: 11.5px; font-weight: 400; color: var(--muted); white-space: nowrap; }
 .small { font-size: 12.5px; }
 
 /* ---------- Jobs and spending ---------- */
@@ -513,6 +515,7 @@ details pre { margin: 6px 0 0; padding: 10px 12px; border-radius: var(--radius-s
   #sessions-table td.meta-cell::before { content: attr(data-label) ": "; color: var(--muted); font-family: var(--sans); }
   #sessions-table td.meta-cell.empty-val { display: none; }
   #sessions-table td.meta-cell .tag { height: 20px; }
+  #sessions-table td.meta-cell .estimated { display: inline; }
 }
 
 footer.foot { margin-top: 40px; font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 16px; justify-content: space-between; }

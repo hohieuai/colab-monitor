@@ -9,7 +9,7 @@ each metric exactly testable. The inputs are:
 - logs: `{"name", "path", "mtime", "lines"}` for each job log.
 
 Colab does not report what each machine costs, so per-machine rates are estimates. They are
-returned with `rate_estimated: True`, and every display marks them as approximate.
+returned with `rate_estimated: True`, and every display labels them as estimated.
 """
 
 import datetime
