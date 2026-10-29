@@ -449,3 +449,20 @@ def test_sessions_fit_without_sideways_scrolling(page_factory, site, width):
         page.evaluate("getComputedStyle(document.querySelector('#sessions-table thead')).display") == "none"
     )
     assert cards == (width < 1280)
+
+
+def test_follow_keeps_the_end_in_view_when_the_chart_opens_late(page, site):
+    # On a slow machine the chart arrives after the log is pinned and pushes the log's end out of view.
+    def slow_metrics(route):
+        time.sleep(1.0)
+        route.continue_()
+
+    page.route("**/api/metrics?*", slow_metrics)
+    open_route(page, site, "logs", "#log-list button")
+    page.locator("#log-list button", has_text="train-gpu.log").click()
+    expect(page.locator("#log-metrics")).to_be_visible(timeout=8000)
+    page.wait_for_timeout(300)
+    assert page.is_checked("#follow")
+    assert page.evaluate(
+        "(() => { const v = document.getElementById('log-view'); return v.scrollTop + v.clientHeight >= v.scrollHeight - 10; })()"
+    )
