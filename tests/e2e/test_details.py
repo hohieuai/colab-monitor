@@ -466,3 +466,31 @@ def test_follow_keeps_the_end_in_view_when_the_chart_opens_late(page, site):
     assert page.evaluate(
         "(() => { const v = document.getElementById('log-view'); return v.scrollTop + v.clientHeight >= v.scrollHeight - 10; })()"
     )
+
+
+def test_the_error_stays_in_view_the_moment_the_chart_opens(page, site):
+    # The error is the log's last line, so the jump leaves it at the bottom of the view. A chart that
+    # opens afterwards shrinks the view from the bottom; a slow CI run measured in that moment.
+    def slow_metrics(route):
+        time.sleep(0.8)
+        route.continue_()
+
+    page.route("**/api/metrics?*", slow_metrics)
+    open_route(page, site, "overview", "#ov-jobs li")
+    page.locator('#ov-jobs li[data-job="train-gpu.log"] a.job-err').click()
+    page.wait_for_selector("#log-view .tl.flash")
+    in_view = page.evaluate(
+        """() => new Promise((resolve) => {
+          const panel = document.getElementById('log-metrics');
+          const check = () => {
+            const v = document.getElementById('log-view').getBoundingClientRect();
+            const row = document.querySelector('#log-view .tl.flash').getBoundingClientRect();
+            return v.top <= row.top && row.bottom <= v.bottom;
+          };
+          if (!panel.hidden) return resolve(null);  // the chart came first: nothing to test
+          new MutationObserver((_, obs) => {
+            if (!panel.hidden) { obs.disconnect(); resolve(check()); }  // before the next frame
+          }).observe(panel, { attributes: true, attributeFilter: ['hidden'] });
+        })"""
+    )
+    assert in_view is True
