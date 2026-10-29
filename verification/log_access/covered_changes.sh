@@ -16,7 +16,7 @@ fi
   for function in resolve_log discover_logs _log_entry tail_lines; do
     git log --format="%h %s" -s "$sync..HEAD" -L ":${function}:${sources}"
   done
-  # Dashboard._log is a method, so it is tracked by its line range.
-  git log --format="%h %s" -s "$sync..HEAD" -L "/def _log/,/def _history/:${server}"
-  git log --format="%h %s" "$sync..HEAD" -G 'LOG_SUFFIXES|/api/log' -- "$sources" "$server"
+  # Dashboard._metrics and Dashboard._log are methods, so they are tracked by their line range.
+  git log --format="%h %s" -s "$sync..HEAD" -L "/def _metrics/,/def _history/:${server}"
+  git log --format="%h %s" "$sync..HEAD" -G 'LOG_SUFFIXES|/api/log|/api/metrics' -- "$sources" "$server"
 } | sort -u

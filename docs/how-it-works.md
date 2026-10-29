@@ -103,6 +103,8 @@ Colab Monitor reads the last 200 lines of each log file:
 - **Last error** is the last line with a Python exception such as `ValueError:`, a traceback,
   `out of memory`, or a line that starts with `error`, `fatal`, or `failed`. Metric names such as
   `val_error` don't count.
+  When a job's last line ended it, that line is the last error, such as
+  `[colab] Session 'NAME' not found.`.
 
 A log belongs to a machine when its name, without the extension, is the machine's session name or
 starts with it followed by `-`, `_`, or `.`. For example, `train-gpu.log` and `train-gpu-run2.log`
@@ -110,6 +112,22 @@ belong to `train-gpu`. A job is **stalled** when its machine runs a command and 
 changed for longer than the stall threshold. Only the machine's newest log can be stalled, because
 older logs with the same session name come from earlier runs. A stalled job often means a hung process, but a job
 that prints rarely, such as a long evaluation, looks the same.
+
+## How a job's state is decided
+
+Each log file gets one state, shown as a badge on the **Jobs** card, the **Logs** list, and a
+machine's details:
+
+| State | When |
+|---|---|
+| Failed | The log's last line ends the job: a Python exception such as `ValueError: ...`, which Python prints last, a traceback, running out of memory, `Killed`, or the colab CLI reporting an error such as `[colab] Session 'NAME' not found.`. Closing notes such as `[colab] Session terminated.` are skipped. A sweep that logs a failed case and carries on to the end did not fail. |
+| Stalled | The job's machine runs a command, and the log has been silent longer than the stall threshold. |
+| Running | The job's machine runs a command. A log that no machine name matches counts as running while it changed in the last two minutes. |
+| Finished | The job's machine is idle, stopping, or released, and the log has no error at its end. A log that no machine matches is finished when its progress reached 100% and it has gone quiet. |
+| No new output | Nothing else applies: no machine matches the log, and it hasn't changed lately. |
+
+A failed job that wrote its error in the last hour also needs attention, unless the CLI's history
+already reported that run as failed.
 
 ## When something needs attention
 
@@ -121,7 +139,7 @@ The overview, `status`, and `watch` list the same items, critical ones first:
 | Runway | Critical | Compute units run out sooner than the runway threshold, 12 hours by default. |
 | Idle | Warning | A machine has been idle longer than the idle threshold, 30 minutes by default. |
 | Stalled | Warning | A running job's log has been silent longer than the stall threshold, 15 minutes by default. |
-| Failed | Warning | A run failed in the last hour. |
+| Failed | Warning | A run failed in the last hour, or a job's log ended in an error in the last hour. |
 
 The [command-line reference](command-line.md#alert-options) shows how to change the thresholds.
 

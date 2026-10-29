@@ -23,7 +23,8 @@ def test_navigation_shows_only_that_page(page, site, route):
     for other in ROUTES:
         assert page.is_visible(f"#page-{other}") == (other == route)
     assert page.get_attribute(f'nav a[data-route="{route}"]', "aria-current") == "page"
-    assert page.title().lower().startswith(route)
+    # The title starts with how many things need attention, such as "(4) Logs · Colab Monitor".
+    assert re.sub(r"^\(\d+\) ", "", page.title()).lower().startswith(route)
 
 
 def test_unknown_route_falls_back_to_overview(page, site):
@@ -81,13 +82,18 @@ def test_attention_lists_orphans_and_failures(page, site):
     assert page.is_visible("#attention")
     assert "critical" in page.get_attribute("#attention", "class")
     items = page.locator("#attention-list li")
-    assert items.count() == 3
-    assert page.inner_text("#attention-title") == "3 things need attention"
-    kinds = [items.nth(i).get_attribute("data-kind") for i in range(3)]
-    assert kinds == ["orphan", "orphan", "failed"]  # critical first
+    assert items.count() == 4
+    assert page.inner_text("#attention-title") == "4 things need attention"
+    kinds = [items.nth(i).get_attribute("data-kind") for i in range(4)]
+    assert kinds == ["orphan", "orphan", "failed", "failed"]  # critical first
     assert "side-run is an orphan" in items.nth(0).inner_text()
     assert "ValueError: bad split" in items.nth(2).inner_text()
-    assert page.is_visible("#orphan-hint") and "unassign" in page.inner_text("#orphan-hint")
+    assert "train-gpu.log ended with an error" in items.nth(3).inner_text()
+    # Each orphan comes with its own release command; the hint no longer needs a placeholder.
+    copy = items.nth(0).locator(".copy-cmd")
+    assert copy.inner_text() == "Copy release command"
+    assert "unassign('cpu-named-orphan')" in copy.get_attribute("title")
+    assert page.is_visible("#orphan-hint") and "ENDPOINT" not in page.inner_text("#orphan-hint")
 
 
 def test_stat_feet_show_spend_and_when_units_run_out(page, site):
@@ -97,11 +103,12 @@ def test_stat_feet_show_spend_and_when_units_run_out(page, site):
 
 
 def test_the_release_command_matches_the_sign_in_method(page_factory, site, adc_site):
-    oauth = open_route(page_factory(), site, "overview", "#attention-list li")
-    assert "AuthProvider" not in oauth.inner_text("#orphan-command")
-    adc = open_route(page_factory(), adc_site, "overview", "#attention-list li")
-    command = adc.inner_text("#orphan-command")
-    assert "state.auth_provider = AuthProvider.ADC" in command and "unassign('ENDPOINT')" in command
+    selector = '#attention-list li[data-subject="side-run"] .copy-cmd'
+    oauth = open_route(page_factory(), site, "overview", selector)
+    assert "AuthProvider" not in oauth.get_attribute(selector, "title")
+    adc = open_route(page_factory(), adc_site, "overview", selector)
+    command = adc.get_attribute(selector, "title")
+    assert "state.auth_provider = AuthProvider.ADC" in command and "unassign('cpu-named-orphan')" in command
 
 
 def test_active_machines_show_uptime_idle_and_rate(page, site):
@@ -181,6 +188,7 @@ def test_chart_breaks_line_where_dashboard_was_off(page, site):
 
 def test_chart_tooltip(page, site):
     open_route(page, site, "overview", "#chart .chart-hit")
+    page.locator("#chart-wrap").scroll_into_view_if_needed()
     hit = page.locator("#chart .chart-hit").bounding_box()
     card = page.locator("#chart-wrap").bounding_box()
     for frac in (0.0, 0.02, 0.5, 0.99, 1.0):
@@ -238,10 +246,16 @@ def test_sessions_rows_statuses_and_script_name(page, site):
 def test_sessions_uptime_and_rate_columns(page, site):
     open_route(page, site, "sessions", "#sessions-body tr")
     headers = page.locator("#sessions-table th").all_inner_texts()
-    assert headers[3:5] == ["Uptime", "Rate"]
+    assert headers[3:7] == ["Uptime", "Idle", "Rate", "Cost"]
     gpu = page.locator("#sessions-body tr", has_text="train-gpu")
     cells = gpu.locator("td").all_inner_texts()
-    assert re.fullmatch(r"1 h( \d+ min)?", cells[3]) and " ".join(cells[4].split()) == "1.41 / hr Estimated"
+    assert re.fullmatch(r"1 h( \d+ min)?", cells[3]) and cells[4] == "\u2013"  # en dash: not idle
+    assert " ".join(cells[5].split()) == "1.41 / hr Estimated"
+    assert re.fullmatch(
+        r"1\.[45]\d Estimated", " ".join(cells[6].split())
+    )  # 1.41 an hour for a bit over an hour
+    idle_cell = page.locator('#sessions-body tr:has-text("eval-cpu") td[data-label="Idle"]')
+    assert re.fullmatch(r"1[6-9] min", idle_cell.inner_text())
     idle = page.get_attribute('#sessions-body tr:has-text("eval-cpu") td[data-label="Uptime"]', "title")
     assert re.fullmatch(r"Idle for 1[6-9] min", idle)  # 1000 s, plus the time the run has taken
 
@@ -475,7 +489,7 @@ def test_long_names_truncate(page, site):
     page.route("**/api/state", long_names)
     open_route(page, site, "sessions", "#sessions-body tr")
     truncated = page.evaluate(
-        "(() => { const d = document.querySelector('#sessions-body td.name > div'); return d.scrollWidth > d.clientWidth; })()"
+        "(() => { const d = document.querySelector('#sessions-body td.name .row-link'); return d.scrollWidth > d.clientWidth; })()"
     )
     fits = page.evaluate(
         "(() => { const w = document.querySelector('#sessions-table'); return w.scrollWidth <= w.clientWidth + 1; })()"

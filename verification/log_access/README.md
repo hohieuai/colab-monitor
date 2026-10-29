@@ -17,11 +17,12 @@ uv run python verification/log_access/check.py --mutants  # about 1 minute
 The first command prints `pass` or `FAIL` for each property, with up to 3 counterexamples for each
 failure. It exits with status 1 if any property fails.
 
-`--mutants` patches three broken versions of `resolve_log` in memory and prints `caught` for each
-one that property P1 catches. If it prints `MISSED`, the check can no longer see the faults it is
+`--mutants` patches three broken versions of `resolve_log` in memory, and prints `caught` for each
+one that property P1 catches. It then patches an `/api/metrics` that skips `resolve_log`, which P5
+must catch. If it prints `MISSED`, the check can no longer see the faults it is
 meant to catch. Fix the check before you trust a pass.
 
-At the sync commit, all four properties pass and `--mutants` prints `caught` three times. Any
+At the sync commit, all five properties pass and `--mutants` prints `caught` four times. Any
 `FAIL` is new.
 
 CI runs the first command on every pull request, on Linux and macOS.
@@ -48,6 +49,7 @@ with a NUL byte. That is 599,040 requests over 4 `--log` and `--log-dir` configu
 | P2 | Every request gets an answer: 200, 400, or 403, never an exception. |
 | P3 | Every log that `/api/state` lists can be opened with `/api/log`. |
 | P4 | A 200 answer holds the lines of the file that the path names. |
+| P5 | `/api/metrics` answers every path with the same status as `/api/log`, so the charts read no file that the Logs page can't. |
 
 The check does not cover:
 
@@ -64,7 +66,7 @@ The check does not cover:
 | File | Code the check covers |
 |---|---|
 | `src/colab_monitor/sources.py` | `resolve_log`, `discover_logs`, `_log_entry`, `tail_lines`, `LOG_SUFFIXES` |
-| `src/colab_monitor/server.py` | `Dashboard.handle` for `/api/log` and `/api/state` (the `logs` list), `Dashboard._log` |
+| `src/colab_monitor/server.py` | `Dashboard.handle` for `/api/log`, `/api/metrics`, and `/api/state` (the `logs` list), `Dashboard._log`, `Dashboard._metrics` |
 
 **Sync commit:** `a8c6cd4`. At this commit, the check was confirmed to describe the code above.
 
@@ -78,7 +80,7 @@ No output means that the covered code is unchanged. The script follows changes i
 function's body with `git log -L`, which a search of the diff for the function's name can miss.
 
 Move the sync commit forward only after you read the changed code, confirm that the tree, the
-labels, and the four properties still describe it, and run the check at the new commit.
+labels, and the five properties still describe it, and run the check at the new commit.
 
 ## Investigate a failure
 

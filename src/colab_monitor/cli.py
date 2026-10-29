@@ -466,10 +466,6 @@ def _machine_lines(report: dict, width: int) -> list[Line]:
     return lines
 
 
-def _ago(seconds: float) -> str:
-    return "just now" if seconds < 5 else f"{metrics.human_duration(seconds)} ago"
-
-
 def _job_lines(report: dict, width: int) -> list[Line]:
     jobs = sorted(
         report["jobs"], key=lambda j: j["silent_s"] if j.get("silent_s") is not None else float("inf")
@@ -492,12 +488,16 @@ def _job_lines(report: dict, width: int) -> list[Line]:
         line: Line = [(name.ljust(name_width) + "  ", None)]
         if job.get("stalled"):
             line.append((f"stalled {_duration(job['silent_s'])}  ", "yellow"))
+        elif job.get("state") == "failed":
+            line.append(("failed  ", "red"))
+        elif job.get("state") == "finished":
+            line.append(("finished  ", "green"))
         line.append(("  ".join(facts) or "no progress printed", None if facts else "dim"))
         notes = []
         if job.get("session"):
             notes.append(f"on {job['session']}")
         if not job.get("stalled") and job.get("silent_s") is not None:
-            notes.append(f"updated {_ago(job['silent_s'])}")
+            notes.append(f"updated {metrics.ago(job['silent_s'])}")
         if notes:
             line.append(("  · " + ", ".join(notes), "dim"))
         lines.append(line)

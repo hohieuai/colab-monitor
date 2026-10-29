@@ -94,6 +94,8 @@ def _sessions_in(path: str) -> list[dict]:
                 "machine_shape": s.machine_shape,
                 "running": s.running,
                 "last_execution": last,
+                # The state file that tracks it, so a stop command can pass the same --config.
+                "config": path,
             }
         )
     return result

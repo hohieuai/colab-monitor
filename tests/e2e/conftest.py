@@ -40,12 +40,23 @@ def site(data):
 
 @pytest.fixture(scope="session")
 def stalled_site(tmp_path_factory):
-    """The running job's log went quiet 20 minutes ago."""
+    """The running job's log went quiet 20 minutes ago, without an error."""
     data = build_data(tmp_path_factory.mktemp("stalled"))
+    log = data["runs"] / "train-gpu.log"
+    log.write_text("".join(line + "\n" for line in log.read_text().splitlines() if "Error" not in line))
     quiet = time.time() - 20 * 60
     os.utime(data["runs"] / "train-gpu.log", (quiet, quiet))
     server, url = serve(sample_dashboard(data))
     yield url
+    server.shutdown()
+
+
+@pytest.fixture
+def fresh(tmp_path):
+    """Its own data and server, for a test that writes to the files."""
+    data = build_data(tmp_path)
+    server, url = serve(sample_dashboard(data))
+    yield url, data
     server.shutdown()
 
 

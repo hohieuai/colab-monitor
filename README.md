@@ -25,18 +25,24 @@ The page has five sections:
   balance runs out at that rate, and a usage chart for the last hour up to the last 30 days. It
   also shows each job's progress, time left, and latest loss, and what you spent today and in the
   last 7 and 30 days.
-- **Sessions** lists every machine on your account with its status, uptime, and estimated cost per
-  hour. A status is running, idle, stopping, orphaned, or released.
-- **Logs** streams the output files of your jobs and highlights errors and warnings.
+- **Sessions** lists every machine on your account with its status, uptime, idle time, and estimated
+  cost per hour and so far. A status is running, idle, stopping, orphaned, or released. Click a
+  machine for its details: what it costs, its job's progress and loss curve, its latest output, its
+  recent history, and the command that stops it, ready to copy.
+- **Logs** streams the output files of your jobs, highlights errors and warnings, charts the loss and
+  other numbers that a job prints, and jumps to the error that ended a failed job.
 - **History** shows the code, output, and errors that the CLI recorded for each session.
-- **Settings** switches between light and dark mode and shows where the data comes from.
+- **Settings** switches between light and dark mode, sets when something needs attention, turns on
+  browser notifications for new problems and finished or failed jobs, and shows where the data comes
+  from.
 
 Idle and orphaned machines still use compute units, so the dashboard marks them in amber and red.
 An orphaned machine runs on your account, but the CLI no longer tracks it, so nothing will stop it
 for you.
 
 Colab Monitor is read-only. It never starts, stops, or connects to a machine, and it serves the
-page only to your own computer.
+page only to your own computer. Where a command would help, such as releasing an orphan, the page
+gives you the command to copy and run yourself.
 
 ## Install and start
 

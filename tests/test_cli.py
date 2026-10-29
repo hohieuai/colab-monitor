@@ -417,6 +417,19 @@ class TestJobs:
         assert "\x1b[33mstalled 20 min" in text
         assert "\x1b[31mCUDA out of memory" in text
 
+    def test_failed_and_finished_jobs_say_so(self):
+        jobs = [
+            _job("died.log", 60.0, state="failed", progress=0.6, last_error="ValueError: bad shard"),
+            _job("done.log", 90.0, state="finished", progress=1.0),
+            _job("busy.log", 5.0, state="running", progress=0.2),
+        ]
+        text = cli.render(_minimal_report(jobs=jobs), width=120, color=True)
+        assert "\x1b[31mfailed  \x1b[0m60%" in text
+        assert "\x1b[32mfinished  \x1b[0m100%" in text
+        plain = cli.render(_minimal_report(jobs=jobs), width=120, color=False)
+        busy = next(line for line in plain.splitlines() if line.startswith("busy.log"))
+        assert "failed" not in busy and "finished" not in busy
+
     def test_newest_logs_first_and_the_rest_counted(self):
         jobs = [_job(f"run{i}.log", float(i * 60)) for i in range(12)]
         text = cli.render(_minimal_report(jobs=list(reversed(jobs))), width=120, color=False)

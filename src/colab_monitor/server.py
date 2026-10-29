@@ -25,6 +25,10 @@ DEFAULT_PORT = 26522  # "COLAB" on a phone keypad; clear of common dev ports and
 DEFAULT_LOG_DIR = "~/colab-runs"
 USAGE_RANGES = {"1h": 3600, "24h": 86400, "7d": 7 * 86400, "30d": 30 * 86400}
 MAX_CHART_POINTS = 360
+MAX_CHART_EVENTS = 100
+# Metric charts read this much of a log's end: a long training log, not just the last screen.
+METRIC_LOG_BYTES = 4 * 1024 * 1024
+METRIC_LOG_LINES = 50_000
 
 
 def _is_positive(value: float) -> bool:
@@ -67,6 +71,8 @@ class Dashboard:
         self.log_files = list(log_files)
         self.log_dirs = list(log_dirs)
         self.thresholds = thresholds
+        # real path -> ((path, mtime, size, points), series): logs only grow, so reuse unchanged reads.
+        self._metric_cache: dict[str, tuple[tuple, list]] = {}
 
     def handle(self, path: str, query: dict) -> tuple[int, dict]:
         if path == "/api/state":
@@ -81,6 +87,8 @@ class Dashboard:
             return self._history(query)
         if path == "/api/usage":
             return self._usage(query)
+        if path == "/api/metrics":
+            return self._metrics(query)
         if path == "/api/activity":
             limit = _clamp_int(query.get("limit"), 20, 1, 200)
             return 200, {"events": sources.recent_activity(self.history_dir, limit=limit)}
@@ -126,10 +134,18 @@ class Dashboard:
             api.get("usage"),
             now=now,
             thresholds=thresholds,
+            adc=self.auth == "adc",
         )
         machines = insights.pop("machines")
         for s in sessions:
             s["metrics"] = machines.get(s["endpoint"])
+            # What stops it: the release command for an orphan, `colab stop` for one the CLI tracks.
+            if s["status"] == "orphan":
+                s["command"] = metrics.release_command(s["endpoint"], adc=self.auth == "adc")
+            elif s["status"] in ("busy", "idle"):
+                s["command"] = metrics.stop_command(s.get("name"), s.get("config"), adc=self.auth == "adc")
+            else:
+                s["command"] = None
         return {
             "version": __version__,
             "generated_at": datetime.datetime.now(datetime.UTC).isoformat(),
@@ -148,6 +164,11 @@ class Dashboard:
                 "history_dir": self.history_dir,
                 "sessions_paths": self.sessions_paths,
                 "usage_log": self.usage_log.path if self.usage_log else None,
+                "thresholds": {
+                    "idle_minutes": self.thresholds.idle_minutes,
+                    "stall_minutes": self.thresholds.stall_minutes,
+                    "runway_hours": self.thresholds.runway_hours,
+                },
             },
         }
 
@@ -155,11 +176,34 @@ class Dashboard:
         key = query.get("range", "24h")
         if key not in USAGE_RANGES:
             return 400, {"error": f"range must be one of {', '.join(USAGE_RANGES)}"}
-        if self.usage_log is None:
-            return 200, {"range": key, "points": []}
         since = time.time() - USAGE_RANGES[key]
+        events = _machine_events(sources.session_timelines(self.history_dir), since)
+        if self.usage_log is None:
+            return 200, {"range": key, "points": [], "events": events}
         points = downsample(self.usage_log.read(since=since), MAX_CHART_POINTS)
-        return 200, {"range": key, "points": points}
+        return 200, {"range": key, "points": points, "events": events}
+
+    def _metrics(self, query: dict) -> tuple[int, dict]:
+        path = query.get("path")
+        if not path:
+            return 400, {"error": "missing path"}
+        real = sources.resolve_log(path, self.log_files, self.log_dirs)
+        if real is None:
+            return 403, {"error": "not a configured log file"}
+        points = _clamp_int(query.get("points"), 200, 2, 1000)
+        try:
+            st = os.stat(real)
+        except OSError:
+            return 200, {"path": path, "series": []}
+        key = (real, st.st_mtime, st.st_size, points)
+        cached = self._metric_cache.get(real)
+        if cached and cached[0] == key:
+            series = cached[1]
+        else:
+            lines = sources.tail_lines(real, max_lines=METRIC_LOG_LINES, max_bytes=METRIC_LOG_BYTES)
+            series = metrics.metric_series(lines, max_points=points)
+            self._metric_cache[real] = (key, series)
+        return 200, {"path": path, "series": series}
 
     def _log(self, query: dict) -> tuple[int, dict]:
         path = query.get("path")
@@ -179,6 +223,19 @@ class Dashboard:
         except ValueError as e:
             return 400, {"error": str(e)}
         return 200, {"session": name, "events": events}
+
+
+def _machine_events(timelines: dict, since: float) -> list[dict]:
+    """Machines that started or stopped since `since`, oldest first, for marks on the usage chart."""
+    events = []
+    for tl in timelines.values():
+        hardware = "CPU" if tl.get("accelerator") in (None, "", "NONE") else tl["accelerator"]
+        if tl["created"] >= since:
+            events.append({"t": tl["created"], "kind": "start", "name": tl["name"], "hardware": hardware})
+        if tl["ended"] is not None and tl["ended"] >= since:
+            events.append({"t": tl["ended"], "kind": "stop", "name": tl["name"], "hardware": hardware})
+    events.sort(key=lambda e: e["t"])
+    return events[-MAX_CHART_EVENTS:]
 
 
 # Only these files are served; anything else under static/ stays private.
