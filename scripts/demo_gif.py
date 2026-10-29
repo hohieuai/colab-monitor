@@ -21,6 +21,7 @@ from playwright.sync_api import sync_playwright
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
+from colab_monitor import metrics  # noqa: E402
 from colab_monitor.poller import ApiPoller  # noqa: E402
 from colab_monitor.server import Dashboard, make_server  # noqa: E402
 from colab_monitor.usage_log import UsageLog  # noqa: E402
@@ -220,6 +221,9 @@ def main() -> None:
 
     with tempfile.TemporaryDirectory() as tmp:
         data = build(pathlib.Path(tmp))
+        # The demo's state file stands in for the colab CLI's default one, so the commands on screen
+        # read as a user sees them: `colab stop -s NAME`, without a temporary --config path.
+        metrics.DEFAULT_SESSIONS_PATH = str(data["root"] / "sessions.json")
         log = data["runs"] / "llama3-finetune.log"
         server = make_server(dashboard(data), "127.0.0.1", 0)
         threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -234,10 +238,15 @@ def main() -> None:
             page.wait_for_timeout(1500)
             capture(page, 2800)
 
+            # Hover where the A100 started: the readout names the machine behind the step in the rate.
             hit = page.locator("#chart .chart-hit").bounding_box()
-            page.mouse.move(hit["x"] + hit["width"] * 0.72, hit["y"] + hit["height"] * 0.5)
+            start = page.locator(
+                "#chart .chart-mark.start", has=page.locator("title", has_text="llama3-finetune")
+            )
+            mark = start.locator("line").bounding_box()
+            page.mouse.move(mark["x"] + 1, hit["y"] + hit["height"] * 0.45)
             page.wait_for_timeout(300)
-            capture(page, 2000)
+            capture(page, 2400)
             page.mouse.move(*REST)
 
             page.locator("#ov-jobs").scroll_into_view_if_needed()
@@ -250,14 +259,29 @@ def main() -> None:
             page.mouse.move(*REST)
             page.wait_for_selector("#sessions-body tr")
             page.wait_for_timeout(600)
-            capture(page, 2400)
+            capture(page, 2000)
+
+            # A machine's details: cost so far, its job's loss curve, and its latest output.
+            page.locator("#sessions-body tr", has_text="llama3-finetune").locator("td.st").click()
+            page.wait_for_selector("#drawer .d-chart svg")
+            page.wait_for_selector("#drawer .d-term .tl")
+            page.mouse.move(*REST)
+            page.wait_for_timeout(600)
+            capture(page, 3000)
+            page.locator("#drawer-body").evaluate(
+                "b => b.scrollTo(0, b.querySelector('.d-job').offsetTop - 12)"
+            )
+            page.wait_for_timeout(400)
+            capture(page, 2800)
+            page.keyboard.press("Escape")
 
             page.click('nav a[data-route="logs"]')
             page.locator("#log-list button", has_text="llama3-finetune.log").click()
             page.mouse.move(*REST)
             page.wait_for_selector("#log-view .tl")
+            page.wait_for_selector("#log-metric-chart svg")  # the loss curve above the log
             page.wait_for_timeout(800)
-            capture(page, 1400)
+            capture(page, 1600)
             for steps in (975, 1050, 1125, 1200):  # the run keeps logging
                 log.write_text(training_log(steps))
                 time.sleep(REFRESH)
@@ -270,6 +294,14 @@ def main() -> None:
             page.mouse.move(*REST)
             page.wait_for_timeout(500)
             capture(page, 2600)
+
+            # The same overview in dark mode, one click away in the sidebar.
+            page.click('.theme-seg [data-theme-choice="dark"]')
+            page.click('nav a[data-route="overview"]')
+            page.mouse.move(*REST)
+            page.wait_for_selector("#chart .chart-line", state="attached")
+            page.wait_for_timeout(800)
+            capture(page, 3000)
             browser.close()
         server.shutdown()
 
