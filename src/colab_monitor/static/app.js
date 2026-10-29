@@ -930,7 +930,8 @@
   $("err-jump").addEventListener("click", goToError);
   // The log's box changes size when the chart above it opens or the window resizes. Keep what the
   // reader was looking at in view: the end while following, or the error that was jumped to.
-  new ResizeObserver(() => { if ($("follow").checked) pinLog(); else centerError(); }).observe($("log-view"));
+  const keepLogPlace = () => { if ($("follow").checked) pinLog(); else centerError(); };
+  new ResizeObserver(keepLogPlace).observe($("log-view"));
 
   async function refreshLogMetrics() {
     const panel = $("log-metrics");
@@ -939,8 +940,12 @@
     let series;
     try { series = await loadSeries(path, 300, 5e3); } catch { return; }
     if (path !== selectedLog) return;
+    const wasHidden = panel.hidden;
     panel.hidden = !series.length;
     if (series.length) renderMetricPanel($("metric-seg"), $("log-metric-chart"), $("metric-caption"), series);
+    // Opening or closing the chart resizes the log at once; the observer below would only catch up a
+    // frame later, with the error or the end out of view until then.
+    if (wasHidden !== panel.hidden) keepLogPlace();
   }
   $("metric-seg").addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b) return;
