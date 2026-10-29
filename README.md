@@ -10,7 +10,7 @@ Monitor your Colab sessions, compute units, and job logs from a local dashboard 
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)
 
-<img src="docs/images/demo.gif" width="900" alt="Colab Monitor tour: the Overview page with a usage chart, job progress and spending, the Sessions page with three running machines, a training log streaming new lines, and a session's history">
+<img src="docs/images/demo.gif" width="900" alt="Colab Monitor tour: the Overview page with a usage chart that marks when each machine started, job progress and spending, the Sessions page with three running machines, one machine's details with its cost and loss curve, a training log streaming new lines under its loss chart, a session's history, and the overview in dark mode">
 
 </div>
 
