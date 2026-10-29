@@ -226,6 +226,248 @@ class TestJobLogs:
         assert metrics.match_session(log, ["train", "llama3-finetune", "llama3"]) == expected
 
 
+class TestJobState:
+    def parsed(self, lines):
+        return metrics.parse_log(lines)
+
+    def test_a_log_that_ends_in_an_error_failed(self):
+        lines = [
+            "step 50/100 loss 0.3",
+            "Traceback (most recent call last):",
+            '  File "train.py"',
+            "ValueError: bad shard",
+        ]
+        assert metrics.job_state(self.parsed(lines), "busy", False, 10, matched=True) == "failed"
+
+    def test_an_error_the_job_survived_is_not_a_failure(self):
+        lines = ["WARNING retry failed once", "step 51/100 loss 0.3", "step 52/100 loss 0.29"]
+        assert metrics.job_state(self.parsed(lines), "busy", False, 10, matched=True) == "running"
+
+    def test_an_old_error_far_from_the_end_is_not_a_failure(self):
+        lines = ["ValueError: shard 3 skipped", *[f"line {i}" for i in range(10)]]
+        assert self.parsed(lines)["ended_with_error"] is False
+
+    def test_a_trailing_message_after_the_error_still_counts(self):
+        lines = ["step 1/2", "ValueError: schema mismatch", "[colab] Session terminated."]
+        assert self.parsed(lines)["ended_with_error"] is True
+
+    @pytest.mark.parametrize(
+        ("status", "stalled", "state"),
+        [
+            ("busy", False, "running"),
+            ("busy", True, "stalled"),
+            ("idle", False, "finished"),
+            ("gone", False, "finished"),
+        ],
+    )
+    def test_the_machine_decides_for_a_matched_log(self, status, stalled, state):
+        assert metrics.job_state(self.parsed(["step 5/10"]), status, stalled, 900, matched=True) == state
+
+    @pytest.mark.parametrize(
+        ("lines", "silent", "state"),
+        [
+            (["step 5/10"], 30, "running"),
+            (["step 10/10"], 900, "finished"),
+            (["step 5/10"], 900, "quiet"),
+            (["hello"], None, "quiet"),
+        ],
+    )
+    def test_an_unmatched_log_is_judged_by_itself(self, lines, silent, state):
+        assert metrics.job_state(self.parsed(lines), None, False, silent, matched=False) == state
+
+
+class TestEndingsSeenInRealLogs:
+    """Endings of real kernel-benchmark and sweep logs, which must not read as failures."""
+
+    def test_a_measured_error_is_not_an_error(self):
+        lines = [
+            "[verify 32] {'batch': 32}: pass (relative L2 error 2.560e-03 (worst row 2.758e-03))",
+            "    median 195.6 µs  min 195.6  max 204.8",
+            "done: 12/12 passed",
+        ]
+        parsed = metrics.parse_log(lines)
+        assert parsed["ended_with_error"] is False and parsed["last_error"] is None
+
+    def test_a_sweep_that_logs_a_failed_case_and_finishes_did_not_die(self):
+        lines = [
+            "t64_s16  ERR AcceleratorError: CUDA error: invalid argument",
+            "t128_s16  168.9 / 9.3 ok",
+            "ALLDONE",
+        ]
+        parsed = metrics.parse_log(lines)
+        assert parsed["ended_with_error"] is False
+        assert parsed["last_error"].startswith(
+            "t64_s16  ERR AcceleratorError"
+        )  # still shown as an earlier error
+
+    @pytest.mark.parametrize(
+        "last",
+        [
+            "[colab] Session 'okc' not found.",
+            "S ERR AcceleratorError: CUDA error: invalid argument",
+            "torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 2.00 GiB",
+            "KeyboardInterrupt",
+            "Killed",
+        ],
+    )
+    def test_a_last_line_that_ends_the_job(self, last):
+        parsed = metrics.parse_log(["step 3/10 loss=0.4", last])
+        assert parsed["ended_with_error"] is True
+        assert parsed["last_error"] == last  # a failed job always says why
+
+    def test_a_server_log_that_went_quiet_did_not_fail(self):
+        lines = [
+            'INFO:     127.0.0.1:42640 - "POST /v1/chat/completions HTTP/1.1" 200 OK',
+            "INFO Engine 000: Running: 0 reqs",
+        ]
+        assert metrics.parse_log(lines)["ended_with_error"] is False
+
+
+class TestMetricSeries:
+    def test_series_follow_the_log_with_line_and_step(self):
+        lines = [
+            "start",
+            "step 1/3 loss=0.9 acc=0.1",
+            "step 2/3 loss=0.5 acc=0.4",
+            "eval val_loss: 0.7",
+            "step 3/3 loss=0.2 acc=0.8",
+        ]
+        series = {s["name"]: s for s in metrics.metric_series(lines)}
+        assert series["loss"]["points"] == [[2, 1, 0.9], [3, 2, 0.5], [5, 3, 0.2]]
+        assert series["acc"]["count"] == 3
+        assert "val_loss" not in series  # one reading is not a line
+
+    def test_a_value_that_never_changes_is_not_a_series(self):
+        lines = [f"step {i}/5 lr=0.0002 sms: 108 loss={1 / i}" for i in range(1, 6)]
+        assert [s["name"] for s in metrics.metric_series(lines)] == ["loss"]
+
+    def test_loss_comes_first_then_the_most_common(self):
+        lines = [f"step {i}/9 acc={i / 10} lr=0.1 loss={1 / i}" for i in range(1, 10)] + ["acc=0.95"]
+        assert [s["name"] for s in metrics.metric_series(lines)][:2] == ["loss", "acc"]
+
+    def test_long_series_are_thinned_but_keep_the_latest_value(self):
+        lines = [f"loss={i}" for i in range(1000)]
+        [loss] = metrics.metric_series(lines, max_points=50)
+        assert len(loss["points"]) == 50 and loss["count"] == 1000
+        assert loss["points"][0][2] == 0 and loss["points"][-1][2] == 999
+
+    def test_error_lines_and_tqdm_steps(self):
+        lines = [
+            "10/100 [00:10<01:30, 1.0it/s, loss=0.5]",
+            "Error at <cell line: 0>",
+            "20/100 [00:20<01:20, 1.0it/s, loss=0.4]",
+        ]
+        [loss] = metrics.metric_series(lines)
+        assert loss["points"] == [[1, 10, 0.5], [3, 20, 0.4]]
+
+
+class TestCommands:
+    def test_release_command_names_the_endpoint(self):
+        cmd = metrics.release_command("gpu-t4-s-abc123")
+        assert (
+            cmd.startswith("uvx --from google-colab-cli python -c") and "unassign('gpu-t4-s-abc123')" in cmd
+        )
+
+    @pytest.mark.parametrize("bad", ["", "a b", "x';rm -rf ~;'", None])
+    def test_no_command_for_an_unsafe_name(self, bad):
+        assert metrics.release_command(bad) is None
+        assert metrics.stop_command(bad) is None
+
+    def test_stop_command_passes_a_non_default_state_file(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HOME", str(tmp_path))
+        assert (
+            metrics.stop_command("train", str(tmp_path / ".config/colab-cli/sessions.json"))
+            == "colab stop -s train"
+        )
+        assert metrics.stop_command("train", "~/.config/colab-cli/sessions.json") == "colab stop -s train"
+        assert (
+            metrics.stop_command("train", "/my state/agent.json")
+            == "colab --config '/my state/agent.json' stop -s train"
+        )
+
+    def test_with_adc_the_commands_sign_in_the_same_way(self):
+        # Without it, the colab CLI signs in with OAuth and waits for a code that never comes.
+        release = metrics.release_command("gpu-abc", adc=True)
+        assert release == (
+            'uvx --from google-colab-cli python -c "from colab_cli.auth import AuthProvider; '
+            "from colab_cli.common import state; state.auth_provider = AuthProvider.ADC; "
+            "state.client.unassign('gpu-abc')\""
+        )
+        assert metrics.stop_command("train", adc=True) == "colab --auth adc stop -s train"
+        assert (
+            metrics.stop_command("train", "/s/agent.json", adc=True)
+            == "colab --auth adc --config /s/agent.json stop -s train"
+        )
+
+    def test_attention_items_carry_commands_and_what_they_are_about(self):
+        sessions, timelines, samples, logs = state_for_insights()
+        sessions[1]["config"] = "/state/agent.json"
+        ins = metrics.compute_insights(
+            sessions,
+            timelines,
+            samples,
+            logs,
+            {"balance": 100.0, "rate_per_hour": 13.53},
+            now=NOW,
+            today_start=NOW - 8 * H,
+        )
+        items = {a["kind"]: a for a in ins["attention"]}
+        assert items["orphan"]["endpoint"] == "anon" and "unassign('anon')" in items["orphan"]["command"]
+        assert items["idle"]["command"] == "colab --config /state/agent.json stop -s eval"
+        assert (
+            items["stalled"]["path"] == "/runs/finetune.log"
+            and items["stalled"]["command"] == "tail -n 50 /runs/finetune.log"
+        )
+        assert items["runway"]["command"] is None and items["failed"]["session"] == "finetune"
+
+
+class TestFailedJobs:
+    def run(self, lines, mtime_ago, executions=()):
+        sessions = [live("t4", status="busy", name="train", accelerator="T4")]
+        timelines = {"t4": timeline(2, name="train", accelerator="T4", executions=list(executions))}
+        logs = [{"name": "train.log", "path": "/runs/train.log", "mtime": NOW - mtime_ago, "lines": lines}]
+        return metrics.compute_insights(sessions, timelines, [], logs, None, now=NOW, today_start=NOW - H)
+
+    def test_a_job_that_died_is_failed_not_stalled_and_needs_attention(self):
+        ins = self.run(["step 3/10 loss 0.5", "RuntimeError: CUDA out of memory"], mtime_ago=40 * 60)
+        [job] = ins["jobs"]
+        assert job["state"] == "failed" and job["stalled"] is False and "ended_with_error" not in job
+        [item] = ins["attention"]
+        assert item["kind"] == "failed" and item["path"] == "/runs/train.log"
+        assert item["message"] == "train.log ended with an error 40 min ago: RuntimeError: CUDA out of memory"
+
+    def test_an_older_log_of_a_reused_name_is_not_running(self):
+        sessions = [live("t4", status="busy", name="train", accelerator="T4")]
+        timelines = {"t4": timeline(2, name="train", accelerator="T4")}
+        logs = [
+            {
+                "name": "train-run1.log",
+                "path": "/runs/train-run1.log",
+                "mtime": NOW - 5 * H,
+                "lines": ["step 10/10"],
+            },
+            {
+                "name": "train-run2.log",
+                "path": "/runs/train-run2.log",
+                "mtime": NOW - 30,
+                "lines": ["step 3/10"],
+            },
+        ]
+        ins = metrics.compute_insights(sessions, timelines, [], logs, None, now=NOW, today_start=NOW - H)
+        assert {j["name"]: j["state"] for j in ins["jobs"]} == {
+            "train-run1.log": "finished",
+            "train-run2.log": "running",
+        }
+
+    def test_an_old_failure_is_no_longer_news(self):
+        ins = self.run(["RuntimeError: boom"], mtime_ago=3 * H)
+        assert ins["jobs"][0]["state"] == "failed" and ins["attention"] == []
+
+    def test_one_item_when_the_history_already_reported_the_run(self):
+        ins = self.run(["RuntimeError: boom"], mtime_ago=60, executions=[(0.01, True)])
+        assert [a["message"].startswith("A run in train failed") for a in ins["attention"]] == [True]
+
+
 # ---------- Insights and attention ----------
 
 

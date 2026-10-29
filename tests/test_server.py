@@ -1,3 +1,4 @@
+import datetime
 import json
 import threading
 import urllib.error
@@ -6,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from colab_monitor import server
+from colab_monitor import metrics, server
 from colab_monitor.poller import ApiPoller
 from colab_monitor.server import Dashboard, make_server
 from colab_monitor.usage_log import UsageLog
@@ -448,3 +449,92 @@ def test_thresholds_must_be_finite_positive_numbers(dashboard, value):
     app, _ = dashboard
     status, body = app.handle("/api/state", {"idle_alert": value})
     assert status == 400 and "positive number" in body["error"]
+
+
+class TestMetricsApi:
+    def test_series_from_a_configured_log(self, dashboard):
+        app, tmp = dashboard
+        (tmp / "runs" / "train.log").write_text(
+            "".join(f"step {i}/50 loss={1 / i:.4f}\n" for i in range(1, 51))
+        )
+        status, body = app.handle("/api/metrics", {"path": str(tmp / "runs" / "train.log"), "points": "10"})
+        assert status == 200
+        [loss] = body["series"]
+        assert loss["name"] == "loss" and loss["count"] == 50 and len(loss["points"]) == 10
+        assert loss["points"][-1] == [50, 50, 0.02]
+
+    def test_refuses_what_api_log_refuses(self, dashboard):
+        app, tmp = dashboard
+        assert app.handle("/api/metrics", {})[0] == 400
+        assert app.handle("/api/metrics", {"path": str(tmp / "secret.log")})[0] == 403
+        assert app.handle("/api/metrics", {"path": "/etc/passwd"})[0] == 403
+
+    def test_rereads_a_log_only_after_it_changes(self, dashboard, monkeypatch):
+        app, tmp = dashboard
+        log = tmp / "runs" / "train.log"
+        log.write_text("loss=1\nloss=0.5\n")
+        reads = []
+        real = metrics.metric_series
+        monkeypatch.setattr(metrics, "metric_series", lambda *a, **k: reads.append(1) or real(*a, **k))
+        for _ in range(3):
+            app.handle("/api/metrics", {"path": str(log)})
+        with open(log, "a") as f:
+            f.write("loss=0.25\n")
+        _, body = app.handle("/api/metrics", {"path": str(log)})
+        assert len(reads) == 2 and body["series"][0]["count"] == 3
+
+    def test_missing_file_has_no_series(self, tmp_path):
+        app = Dashboard(
+            None,
+            sessions_path=str(tmp_path / "s.json"),
+            history_dir=str(tmp_path),
+            log_files=[str(tmp_path / "gone.log")],
+        )
+        assert app.handle("/api/metrics", {"path": str(tmp_path / "gone.log")}) == (
+            200,
+            {"path": str(tmp_path / "gone.log"), "series": []},
+        )
+
+
+def test_usage_lists_machine_starts_and_stops_in_range(tmp_path):
+    history = tmp_path / "history"
+    history.mkdir()
+    now = datetime.datetime.now(datetime.UTC)
+    iso = lambda hours: (now - datetime.timedelta(hours=hours)).isoformat()  # noqa: E731
+    (history / "a.jsonl").write_text(
+        json.dumps(
+            {"timestamp": iso(30), "event_type": "session_created", "endpoint": "old", "accelerator": "T4"}
+        )
+        + "\n"
+        + json.dumps(
+            {"timestamp": iso(2), "event_type": "session_created", "endpoint": "new", "accelerator": "A100"}
+        )
+        + "\n"
+        + json.dumps({"timestamp": iso(1), "event_type": "session_terminated"})
+        + "\n"
+    )
+    app = Dashboard(None, sessions_path=str(tmp_path / "s.json"), history_dir=str(history))
+    _, body = app.handle("/api/usage", {"range": "24h"})
+    assert [(e["kind"], e["name"], e["hardware"]) for e in body["events"]] == [
+        ("start", "a", "A100"),
+        ("stop", "a", "A100"),
+    ]
+    assert body["events"][0]["t"] < body["events"][1]["t"]
+    _, week = app.handle("/api/usage", {"range": "7d"})
+    assert [e["hardware"] for e in week["events"]] == ["T4", "A100", "A100"]
+
+
+def test_each_session_says_what_stops_it(dashboard):
+    app, tmp = dashboard
+    _, body = app.handle("/api/state", {})
+    by_endpoint = {s["endpoint"]: s for s in body["sessions"]}
+    assert by_endpoint["e1"]["command"] == f"colab --config {tmp / 'sessions.json'} stop -s job"
+    assert "unassign('e2')" in by_endpoint["e2"]["command"]
+    assert by_endpoint["e1"]["config"] == str(tmp / "sessions.json")
+
+
+def test_state_reports_the_default_thresholds_even_when_overridden(dashboard):
+    app, _ = dashboard
+    _, body = app.handle("/api/state", {"idle_alert": "5"})
+    assert body["config"]["thresholds"] == {"idle_minutes": 30, "stall_minutes": 15, "runway_hours": 12}
+    assert body["insights"]["thresholds"]["idle_minutes"] == 5

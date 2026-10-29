@@ -171,6 +171,11 @@ for a in r["attention"]:
 - `attention` lists what needs a look, critical first: `orphan`, `runway` (compute units run out
   within 12 hours), `idle` (idle over 30 minutes), `stalled` (a running job's log silent over 15
   minutes), and `failed` (a run failed in the last hour). Report each one to the user.
+- Each `attention` item has a `command` when one deals with it, such as the release command for an
+  orphan or `colab stop -s NAME` for an idle machine. Show it to the user; never run a release
+  command without their approval.
+- Each job has a `state`: `running`, `stalled`, `finished`, `failed`, or `quiet`. Report `failed`
+  jobs with their `last_error`.
 - `colab-monitor status --exit-code` exits with status 3 when `attention` is not empty, so a script
   can check it without parsing.
 - A machine's `rate` with `rate_estimated: true` is an estimate. Say "about" when you report it.

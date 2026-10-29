@@ -14,8 +14,12 @@ returned with `rate_estimated: True`, and every display labels them as estimated
 
 import datetime
 import itertools
+import os
 import re
+import shlex
 from dataclasses import dataclass
+
+from colab_monitor.sources import DEFAULT_SESSIONS_PATH
 
 SCHEMA = 1
 LIVE_STATUSES = frozenset({"busy", "idle", "stopping", "orphan"})
@@ -26,6 +30,9 @@ MAX_BASELINE_GAP = 3600.0
 MAX_ATTRIBUTION_GAP = 15 * 60.0
 FAILED_RUN_WINDOW = 3600.0
 MAX_METRICS = 8
+MAX_SERIES = 8
+# A log written to this recently belongs to a running job, even without a machine to match it to.
+ACTIVE_LOG_SECONDS = 120.0
 
 
 @dataclass(frozen=True)
@@ -229,6 +236,14 @@ _ERROR = re.compile(
 )
 # Only this much of a line is parsed, which keeps the regular expressions fast on huge lines.
 MAX_LINE_CHARS = 2_000
+# A line that ends a job: a Python exception such as "ValueError: ..." (Python prints it last), a
+# traceback header, running out of memory, the OS killing it, or the colab CLI giving up.
+_FATAL = re.compile(
+    r"(?:^|\s)[A-Z][\w.]*(?:Error|Exception|Interrupt)(?::|$)"
+    r"|Traceback \(most recent call last\)|out of memory|Segmentation fault|^Killed$"
+    r"|^\[colab\] .*\b(?:not found|failed|error)\b"
+)
+_COLAB_NOTE = re.compile(r"^\[colab\] ")
 _SUFFIXES = (".log", ".out", ".err")
 
 
@@ -262,6 +277,20 @@ def _progress(line: str) -> tuple[float, float | None, str | None] | None:
     return None
 
 
+def _line_metrics(line: str) -> list[tuple[str, float]]:
+    """The `name=value` training numbers on one line, in the order they appear."""
+    if _ERROR.search(line):  # "<cell line: 0>" in a traceback is not a metric
+        return []
+    found = []
+    for pattern in (_KEY_VALUE, _KNOWN_SPACED):
+        for key, number in pattern.findall(line):
+            # One-letter names, as in "mean y: -10.8", name a column, not a metric.
+            if len(key) < 2 or key.lower() in _NOT_METRICS:
+                continue
+            found.append((key, float(number)))
+    return found
+
+
 def parse_log(lines: list[str]) -> dict:
     """Progress, ETA, speed, latest training numbers, and the last error from a log's last lines."""
     lines = [line[:MAX_LINE_CHARS] for line in lines]
@@ -274,19 +303,86 @@ def parse_log(lines: list[str]) -> dict:
 
     values: dict[str, float] = {}
     for line in lines[-30:]:
-        if _ERROR.search(line):  # "<cell line: 0>" in a traceback is not a metric
-            continue
-        for pattern in (_KEY_VALUE, _KNOWN_SPACED):
-            for key, number in pattern.findall(line):
-                # One-letter names, as in "mean y: -10.8", name a column, not a metric.
-                if len(key) < 2 or key.lower() in _NOT_METRICS:
-                    continue
-                values.pop(key, None)  # re-insert so the latest values come last
-                values[key] = float(number)
+        for key, value in _line_metrics(line):
+            values.pop(key, None)  # re-insert so the latest values come last
+            values[key] = value
     metrics = dict(list(values.items())[-MAX_METRICS:])
 
-    last_error = next((line.strip() for line in reversed(lines) if _ERROR.search(line)), None)
-    return {"progress": progress, "eta_s": eta, "speed": speed, "metrics": metrics, "last_error": last_error}
+    error_at = next((i for i in range(len(lines) - 1, -1, -1) if _ERROR.search(lines[i])), None)
+    last_error = lines[error_at].strip() if error_at is not None else None
+    # A job died when its last line says so, past any closing notes from the colab CLI such as
+    # "[colab] Session terminated.". A sweep that logs a failed case and carries on did not die.
+    ending = [line.strip() for line in lines if line.strip()]
+    while len(ending) > 1 and _COLAB_NOTE.match(ending[-1]) and not _FATAL.search(ending[-1]):
+        ending.pop()
+    ended_with_error = bool(ending) and bool(_FATAL.search(ending[-1]))
+    if ended_with_error:
+        last_error = ending[-1]  # the line that ended the job is the error to show
+    return {
+        "progress": progress,
+        "eta_s": eta,
+        "speed": speed,
+        "metrics": metrics,
+        "last_error": last_error,
+        "ended_with_error": ended_with_error,
+    }
+
+
+def job_state(
+    parsed: dict, session_status: str | None, stalled: bool, silent: float | None, matched: bool
+) -> str:
+    """failed, stalled, running, finished, or quiet (nothing says which, and nothing new is printed).
+
+    Without a matched machine, only the log itself can tell: a recent write means running, and a
+    complete progress bar that has gone quiet means finished.
+    """
+    if parsed["ended_with_error"]:
+        return "failed"
+    if stalled:
+        return "stalled"
+    if matched:
+        if session_status == "busy":
+            return "running"
+        if session_status in ("idle", "stopping", "gone"):
+            return "finished"
+    if silent is not None and silent < ACTIVE_LOG_SECONDS:
+        return "running"
+    if parsed["progress"] is not None and parsed["progress"] >= 1:
+        return "finished"
+    return "quiet"
+
+
+def metric_series(lines: list[str], max_points: int = 200) -> list[dict]:
+    """Every training number in a log as a series over time, for charts.
+
+    Each point is `[line, step, value]`: the 1-based line number, the step or item count printed on
+    that line if any, and the value. Series with fewer than two points, or one value throughout, such
+    as a setting printed with each step, are left out. The most
+    common series come first, `loss` always first when there is one.
+    """
+    series: dict[str, list[list]] = {}
+    for i, line in enumerate(line[:MAX_LINE_CHARS] for line in lines):
+        found = _line_metrics(line)
+        if not found:
+            continue
+        step = None
+        for pattern in (_TQDM, _STEP):
+            m = pattern.search(line)
+            if m:
+                step = int(m.group(1))
+                break
+        for key, value in found:
+            series.setdefault(key, []).append([i + 1, step, value])
+    result = []
+    for name, points in series.items():
+        if len(points) < 2 or len({p[2] for p in points}) < 2:  # a value that never changes has no trend
+            continue
+        if len(points) > max_points:  # evenly spaced, always keeping the latest value
+            stride = len(points) / max_points
+            points = [points[int(k * stride)] for k in range(max_points - 1)] + [points[-1]]
+        result.append({"name": name, "count": len(series[name]), "points": points})
+    result.sort(key=lambda s: (s["name"].lower() != "loss", -s["count"]))
+    return result[:MAX_SERIES]
 
 
 def match_session(log_name: str, session_names: list[str]) -> str | None:
@@ -315,6 +411,11 @@ def human_duration(seconds: float) -> str:
     return f"{seconds // 86400} days"
 
 
+def ago(seconds: float) -> str:
+    """'just now' or '42 min ago'."""
+    return "just now" if seconds < 5 else f"{human_duration(seconds)} ago"
+
+
 # ---------- Everything together ----------
 
 
@@ -327,8 +428,13 @@ def compute_insights(
     now: float,
     today_start: float | None = None,
     thresholds: Thresholds = Thresholds(),  # noqa: B008 - frozen dataclass, safe as a default
+    adc: bool = False,
 ) -> dict:
-    """All insights for one moment. The `schema` number changes only when fields change meaning."""
+    """All insights for one moment. The `schema` number changes only when fields change meaning.
+
+    `adc` says the dashboard signs in with Application Default Credentials, so the commands it
+    offers do too.
+    """
     if today_start is None:
         local = datetime.datetime.fromtimestamp(now)
         today_start = local.replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
@@ -359,7 +465,12 @@ def compute_insights(
             and log.get("mtime") == newest.get(session)
             and silent is not None
             and silent > thresholds.stall_minutes * 60
+            and not parsed["ended_with_error"]  # a job that died is failed, not silent
         )
+        # An older log of a reused session name comes from a run that has ended.
+        run_status = status_by_name.get(session) if log.get("mtime") == newest.get(session) else "gone"
+        state = job_state(parsed, run_status, stalled, silent, matched=session is not None)
+        parsed.pop("ended_with_error")
         jobs.append(
             {
                 "name": log["name"],
@@ -367,6 +478,7 @@ def compute_insights(
                 "session": session,
                 "silent_s": silent,
                 "stalled": stalled,
+                "state": state,
                 **parsed,
             }
         )
@@ -391,7 +503,7 @@ def compute_insights(
         ),
         "runs": run_counts(timelines, now),
         "jobs": jobs,
-        "attention": _attention(sessions, timelines, machines, jobs, run, now, thresholds),
+        "attention": _attention(sessions, timelines, machines, jobs, run, now, thresholds, adc),
         "thresholds": {
             "idle_minutes": thresholds.idle_minutes,
             "stall_minutes": thresholds.stall_minutes,
@@ -400,12 +512,55 @@ def compute_insights(
     }
 
 
-def _attention(sessions, timelines, machines, jobs, run, now, thresholds) -> list[dict]:
-    """What needs a look, most serious first."""
+_SAFE_ARG = re.compile(r"^[A-Za-z0-9._-]+$")
+
+
+def release_command(endpoint: str, adc: bool = False) -> str | None:
+    """The command that releases an orphan, which the colab CLI can't stop.
+
+    With `adc`, it signs in with Application Default Credentials as the dashboard does; otherwise
+    the colab CLI uses OAuth and waits for a code.
+    """
+    if not _SAFE_ARG.match(endpoint or ""):
+        return None
+    sign_in = ("from colab_cli.auth import AuthProvider; ", "state.auth_provider = AuthProvider.ADC; ")
+    first, then = sign_in if adc else ("", "")
+    return (
+        f'uvx --from google-colab-cli python -c "{first}from colab_cli.common import state; '
+        f"{then}state.client.unassign('{endpoint}')\""
+    )
+
+
+def stop_command(name: str | None, config: str | None = None, adc: bool = False) -> str | None:
+    """`colab stop -s NAME`, with the sign-in and the state file that the session needs."""
+    if not name or not _SAFE_ARG.match(name):
+        return None
+    options = ["--auth adc"] if adc else []
+    default = os.path.expanduser(DEFAULT_SESSIONS_PATH)
+    if config and os.path.abspath(os.path.expanduser(config)) != default:
+        options.append(f"--config {shlex.quote(config)}")
+    return " ".join(["colab", *options, "stop", "-s", name])
+
+
+def _attention(sessions, timelines, machines, jobs, run, now, thresholds, adc=False) -> list[dict]:
+    """What needs a look, most serious first.
+
+    Items name what they are about (`endpoint`, `session`, or `path`) and, when a command fixes
+    them, carry it in `command`. Colab Monitor never runs it.
+    """
     items = []
 
-    def add(severity, kind, subject, message):
-        items.append({"severity": severity, "kind": kind, "subject": subject, "message": message})
+    def add(severity, kind, subject, message, **about):
+        items.append(
+            {
+                "severity": severity,
+                "kind": kind,
+                "subject": subject,
+                "message": message,
+                "command": None,
+                **about,
+            }
+        )
 
     for s in sessions:
         if s.get("status") == "orphan":
@@ -415,6 +570,8 @@ def _attention(sessions, timelines, machines, jobs, run, now, thresholds) -> lis
                 "orphan",
                 label,
                 f"{label} is an orphan: Colab bills it, and the colab CLI has no record of it.",
+                endpoint=s["endpoint"],
+                command=release_command(s["endpoint"], adc),
             )
     if run["hours"] is not None and run["hours"] < thresholds.runway_hours:
         add(
@@ -433,7 +590,15 @@ def _attention(sessions, timelines, machines, jobs, run, now, thresholds) -> lis
         ):
             label = s.get("name") or s["endpoint"]
             cost = f" (about {m['idle_cost']:.2f} units)" if m["idle_cost"] else ""
-            add("warning", "idle", label, f"{label} has been idle for {human_duration(m['idle_s'])}{cost}.")
+            add(
+                "warning",
+                "idle",
+                label,
+                f"{label} has been idle for {human_duration(m['idle_s'])}{cost}.",
+                endpoint=s["endpoint"],
+                session=s.get("name"),
+                command=stop_command(s.get("name"), s.get("config"), adc),
+            )
     for job in jobs:
         if job["stalled"]:
             add(
@@ -442,16 +607,38 @@ def _attention(sessions, timelines, machines, jobs, run, now, thresholds) -> lis
                 job["name"],
                 f"{job['name']} has printed nothing for {human_duration(job['silent_s'])} "
                 f"while {job['session']} runs.",
+                path=job["path"],
+                session=job["session"],
+                command=f"tail -n 50 {shlex.quote(job['path'])}",
             )
+    failed_sessions = set()
     for tl in timelines.values():
         recent = [t for t, failed in tl["executions"] if failed and now - t <= FAILED_RUN_WINDOW]
         if recent:
+            failed_sessions.add(tl["name"])
             error = f": {tl['last_error']}" if tl.get("last_error") else "."
             add(
                 "warning",
                 "failed",
                 tl["name"],
                 f"A run in {tl['name']} failed {human_duration(now - max(recent))} ago{error}",
+                session=tl["name"],
+            )
+    for job in jobs:
+        # A log that ends in an error, unless the CLI's history already reported that run.
+        if (
+            job["state"] == "failed"
+            and job["silent_s"] is not None
+            and job["silent_s"] <= FAILED_RUN_WINDOW
+            and job["session"] not in failed_sessions
+        ):
+            add(
+                "warning",
+                "failed",
+                job["name"],
+                f"{job['name']} ended with an error {ago(job['silent_s'])}: {job['last_error']}",
+                path=job["path"],
+                session=job["session"],
             )
 
     order = {"critical": 0, "warning": 1}

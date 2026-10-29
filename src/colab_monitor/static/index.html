@@ -75,8 +75,8 @@
           <h2 id="attention-title">Needs attention</h2>
         </div>
         <ul class="attention-list" id="attention-list"></ul>
-        <div class="attention-hint" id="orphan-hint" hidden>The colab CLI can't stop an orphan. Release one with
-          <code id="orphan-command">uvx --from google-colab-cli python -c "from colab_cli.common import state; state.client.unassign('ENDPOINT')"</code></div>
+        <div class="attention-hint" id="orphan-hint" hidden>The colab CLI can't stop an orphan, so each one comes with the command that releases it.
+          Colab Monitor never runs a command for you.</div>
       </section>
 
       <section class="stats" aria-label="Compute units">
@@ -192,7 +192,7 @@
       <section class="card">
         <div class="table-wrap" id="sessions-table">
           <table>
-            <thead><tr><th>Name</th><th>Status</th><th>Hardware</th><th class="num">Uptime</th><th class="num">Rate</th><th>Job</th><th>Last run</th></tr></thead>
+            <thead><tr><th>Name</th><th>Status</th><th>Hardware</th><th class="num">Uptime</th><th class="num">Idle</th><th class="num">Rate</th><th class="num">Cost</th><th>Job</th><th class="col-last">Last run</th></tr></thead>
             <tbody id="sessions-body"></tbody>
           </table>
         </div>
@@ -216,6 +216,13 @@
       <section class="card pane">
         <div class="pane-list" id="log-list" aria-label="Log files"></div>
         <div class="pane-main">
+          <div class="metrics-panel" id="log-metrics" hidden>
+            <div class="metrics-head">
+              <div class="seg" role="group" aria-label="Metric" id="metric-seg"></div>
+              <span class="faint small" id="metric-caption"></span>
+            </div>
+            <div class="metric-chart" id="log-metric-chart"></div>
+          </div>
           <div class="term">
             <div class="term-bar">
               <span class="term-file" id="term-file">No log selected</span>
@@ -227,7 +234,7 @@
               </div>
             </div>
             <div class="term-body" id="log-view"></div>
-            <div class="term-status"><span id="term-left"></span><span id="term-right"></span></div>
+            <div class="term-status"><span><span id="term-left"></span><button class="term-jump" type="button" id="err-jump" hidden></button></span><span id="term-right"></span></div>
           </div>
         </div>
       </section>
@@ -267,6 +274,32 @@
           </div>
         </section>
         <section class="card">
+          <div class="card-head"><h2>Alerts</h2><span class="faint small">This browser only</span></div>
+          <form class="alerts" id="alerts-form" novalidate>
+            <label class="field"><span class="field-label">Idle machine</span>
+              <span class="field-input"><input type="number" id="alert-idle" name="idle_alert" min="1" step="any" inputmode="decimal" required><span class="unit">min</span></span>
+              <span class="field-help">A machine that runs nothing for this long needs attention.</span></label>
+            <label class="field"><span class="field-label">Silent job</span>
+              <span class="field-input"><input type="number" id="alert-stall" name="stall_alert" min="1" step="any" inputmode="decimal" required><span class="unit">min</span></span>
+              <span class="field-help">A running job whose log prints nothing for this long.</span></label>
+            <label class="field"><span class="field-label">Runway</span>
+              <span class="field-input"><input type="number" id="alert-runway" name="runway_alert" min="1" step="any" inputmode="decimal" required><span class="unit">hours</span></span>
+              <span class="field-help">Compute units that run out sooner than this.</span></label>
+            <div class="alerts-foot">
+              <span class="field-error" id="alerts-error" role="alert"></span>
+              <button class="btn" type="button" id="alerts-reset">Reset to defaults</button>
+              <button class="btn primary" type="submit">Save</button>
+            </div>
+          </form>
+          <div class="notify-row">
+            <div>
+              <div class="notify-title">Browser notifications</div>
+              <div class="field-help" id="notify-help">Get a notification when something new needs attention, or a job finishes or fails, while this page is open.</div>
+            </div>
+            <label class="switch light"><input type="checkbox" id="notify-toggle"><span class="track"></span><span class="sr-only">Browser notifications</span></label>
+          </div>
+        </section>
+        <section class="card">
           <div class="card-head"><h2>Colab connection</h2><span class="status" id="set-api-status"></span></div>
           <div class="kv" id="set-api"></div>
         </section>
@@ -288,6 +321,19 @@
     </main>
   </div>
 </div>
+
+<div class="drawer-scrim" id="drawer-scrim" hidden></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" tabindex="-1" hidden>
+  <div class="drawer-head">
+    <div class="drawer-titles">
+      <h2 id="drawer-title"></h2>
+      <div class="drawer-ep" id="drawer-ep"></div>
+    </div>
+    <span id="drawer-status"></span>
+    <button class="btn icon" type="button" id="drawer-close" aria-label="Close details"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
+  </div>
+  <div class="drawer-body" id="drawer-body"></div>
+</aside>
 
 <script src="/app.js"></script>
 </body>

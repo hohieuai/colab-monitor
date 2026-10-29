@@ -127,6 +127,7 @@ says otherwise, and every value that Colab Monitor cannot work out is `null`.
 | `jobs[].session` | string | The machine that the log belongs to, matched by name. |
 | `jobs[].silent_s` | number | Seconds since the file last changed. |
 | `jobs[].stalled` | boolean | `true` when the job's machine is busy and the file has been silent longer than `--stall-alert`. |
+| `jobs[].state` | string | `running`, `stalled`, `finished`, `failed`, or `quiet`. See [How Colab Monitor works](how-it-works.md#how-a-jobs-state-is-decided). |
 | `jobs[].progress` | number | Progress from 0 to 1, read from the last progress line. |
 | `jobs[].eta_s` | number | Seconds left, from the progress line. |
 | `jobs[].speed` | string | The speed on the progress line, such as `3.1 it/s`. |
@@ -139,6 +140,8 @@ says otherwise, and every value that Colab Monitor cannot work out is `null`.
 | `attention[].kind` | string | `orphan`, `runway`, `idle`, `stalled`, or `failed`. |
 | `attention[].subject` | string | The machine, log file, or `compute units`. |
 | `attention[].message` | string | One sentence for people. |
+| `attention[].command` | string | A command that deals with the item, such as the one that releases an orphan or `colab stop -s NAME` for an idle machine. `null` when there is none. Colab Monitor never runs it. |
+| `attention[].endpoint`, `attention[].session`, `attention[].path` | string | What the item is about, when it applies: the machine's endpoint, the session name, or the log file. |
 | `thresholds` | object | `idle_minutes`, `stall_minutes`, and `runway_hours` in effect. |
 
 For example, a script can stop when something needs attention:
@@ -182,9 +185,14 @@ The page uses these endpoints. All of them take `GET` and return JSON. Any other
 | `/api/history?session=NAME&limit=N` | The latest `N` events of one session, oldest first. `N` is 1 to 500, and the default is 50. An invalid name returns `400`. |
 | `/api/usage?range=R` | Chart samples for `R`, which is `1h`, `24h`, `7d`, or `30d`. The default is `24h`. At most 360 points are returned. Another value returns `400`. |
 | `/api/activity?limit=N` | The latest `N` events across all sessions, newest first. `N` is 1 to 200, and the default is 20. |
+| `/api/metrics?path=FILE&points=N` | Every training number in a configured log file as a series, for charts: `series[]` with `name`, `count`, and `points` of `[line, step, value]`. Reads the last 4 MB of the file. `N` is 2 to 1,000 points per series, and the default is 200. The same paths as `/api/log` are refused. |
 
 In `/api/state`, each session's `metrics` holds `uptime_s`, `idle_s`, `rate`, `rate_estimated`,
-`cost`, and `idle_cost`, and is `null` for a released machine. `insights` holds `spend`, `runway`,
+`cost`, and `idle_cost`, and is `null` for a released machine. Each session also has `command`, the
+command that stops it (`colab stop -s NAME`, or the release command for an orphan), and `config`, the
+state file that tracks it. `/api/usage` also returns `events`: each machine that started or stopped
+in the range, with `t`, `kind` (`start` or `stop`), `name`, and `hardware`. `config.thresholds` holds
+the dashboard's own alert thresholds, which a request's query parameters do not change. `insights` holds `spend`, `runway`,
 `idle_cost`, `machine_hours_7d`, `runs`, `jobs`, `attention`, and `thresholds`, with the same
 meaning as in [the status report](#the-status-report).
 

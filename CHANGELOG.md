@@ -31,13 +31,33 @@ All notable changes to this project are documented here. The format follows
   CLI's colab-operator skill.
 - `--config` can be repeated, so machines that agents start with `colab --config FILE` no longer
   show as orphans.
+- **Machine details:** click a machine on the **Sessions** page or the overview to see its uptime,
+  rate, and cost so far, its job's state, loss curve, and latest output, its recent history, and the
+  command that stops or releases it. Each machine has its own link, `#/sessions?session=ENDPOINT`.
+- Each job has a state: running, stalled, finished, failed, or no new output. A log that ends in an
+  error marks its job as failed, needs attention, and links straight to the error line. `status`
+  prints `failed` and `finished` next to those jobs, and `status --json` has `jobs[].state`.
+- **Loss curves:** the **Logs** page charts every number a job prints, such as `loss` and `acc`, and
+  the **Jobs** card shows a small trend line for each job. New endpoint: `/api/metrics`.
+- Each item that needs attention links to the machine, the log, or the history, and carries the
+  command that deals with it, such as the release command for that orphan, ready to copy. The
+  commands sign in the way the dashboard does, so with `--auth adc` they don't wait for an OAuth code. `status
+  --json` has `attention[].command`.
+- The usage chart marks when each machine started and stopped, and the hover readout names them.
+- The tab title and icon show how many things need attention, so a background tab still tells you.
+- **Settings** sets the alert thresholds for this browser, and can turn on browser notifications for
+  new problems and for jobs that finish or fail.
+- **Sessions** has **Idle** and **Cost** columns. Narrower windows show each machine as a card.
+- **Logs** lists each file's job state, progress, and machine, and **Go to error** steps through the
+  error lines of a log.
 
 ### Changed
 
 - `colab-monitor` takes a command: `serve`, `status`, or `watch`. Without one it starts the
   dashboard as before, so existing commands keep working.
-- The red orphan banner is now part of the **Needs attention** list, which keeps the command that
-  releases an orphan.
+- The red orphan banner is now part of the **Needs attention** list. Each orphan carries its own
+  release command with its endpoint filled in, instead of one command with an `ENDPOINT` placeholder.
+- A running job whose log ends in an error is failed, not stalled.
 - A new icon, `[*]`: the mark a notebook shows next to a cell that is running.
 - The agent skill reads `colab-monitor status --json` instead of calling the HTTP API.
 - Every `colab run` and `colab exec` example, and the agent skill, pass `--timeout 86400`, so the

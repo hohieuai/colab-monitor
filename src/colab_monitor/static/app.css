@@ -336,12 +336,19 @@ td.num .estimated { display: block; }
 @keyframes blink { 50% { opacity: 0.25; } }
 @media (prefers-reduced-motion: reduce) { .status.stopping .d { animation: none; } }
 .status-hint { margin-left: 8px; font-size: 12.5px; color: var(--muted); }
-td.name > div { max-width: 280px; }
+td.name > div { max-width: 220px; }
+/* Nine columns: tighter cells, and the last run (also in each machine's details) goes first when space runs out. */
+@media (min-width: 1280px) {
+  #sessions-table th, #sessions-table td { padding-left: 14px; padding-right: 14px; }
+  #sessions-table th:first-child, #sessions-table td:first-child { padding-left: 20px; }
+  #sessions-table th:last-child, #sessions-table td:last-child { padding-right: 20px; }
+}
+@media (min-width: 1280px) and (max-width: 1439px) { #sessions-table .col-last { display: none; } }
 td.name > div, td.job { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 td.name .ep { font: 12px var(--mono); color: var(--muted); margin-top: 2px; }
-td.job { max-width: 220px; font: 12.5px var(--mono); color: var(--text-2); }
-/* The explanation next to a status badge needs room; below this width it moves to the badge's tooltip. */
-@media (max-width: 1599px) { .status-hint { display: none; } }
+td.job { max-width: 180px; font: 12.5px var(--mono); color: var(--text-2); }
+/* A status's explanation is in its tooltip and in the machine's details; the table has no room for it. */
+#sessions-table .status-hint { display: none; }
 
 /* Notice: Colab checks failing, numbers are from the last good check. */
 .notice {
@@ -500,8 +507,8 @@ details pre { margin: 6px 0 0; padding: 10px 12px; border-radius: var(--radius-s
 .swatch.system { background: linear-gradient(135deg, #fafafa 50%, #0a0a0a 50%); }
 .note { font-size: 13px; color: var(--text-2); }
 
-/* Phones: each session becomes a card instead of a sideways-scrolling table. */
-@media (max-width: 640px) {
+/* Narrower windows: each session becomes a card instead of a sideways-scrolling table. */
+@media (max-width: 1279px) {
   #sessions-table thead { display: none; }
   #sessions-table table, #sessions-table tbody { display: block; }
   #sessions-table tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
@@ -517,13 +524,171 @@ details pre { margin: 6px 0 0; padding: 10px 12px; border-radius: var(--radius-s
   #sessions-table td.meta-cell .tag { height: 20px; }
   #sessions-table td.meta-cell .estimated { display: inline; }
 }
+/* Tablets and small laptops: the card's facts sit in four columns. */
+@media (min-width: 641px) and (max-width: 1279px) {
+  #sessions-table tr { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px 16px; padding: 14px 20px; }
+  #sessions-table td.name { grid-column: 1 / 4; }
+  #sessions-table td.st { grid-column: 4; justify-self: end; }
+  #sessions-table td.meta-cell { grid-column: auto; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #sessions-table td.meta-cell.empty-val { display: block; }
+}
+@media (max-width: 1279px) { #sessions-table tr.clickable:hover { background: var(--surface-2); } }
+
+/* ---------- Clickable rows ---------- */
+.clickable { cursor: pointer; }
+.row-link { color: inherit; text-decoration: none; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row-link:hover { text-decoration: underline; }
+.rows li.clickable:hover { background: var(--surface-2); }
+td.warn { color: var(--amber); font-weight: 500; }
+
+/* ---------- Attention actions ---------- */
+.attention-list li { align-items: flex-start; padding: 6px 0; }
+.attention-list li + li { border-top: 1px solid color-mix(in srgb, currentColor 8%, transparent); }
+.attention-list .sev { transform: translateY(7px); }
+.att-body { flex: 1; min-width: 0; }
+.att-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: 4px; }
+.att-actions .link { font-size: 12.5px; }
+.btn.sm { height: 26px; padding: 0 9px; gap: 6px; font-size: 12.5px; font-weight: 500; color: var(--text-2); background: var(--surface); }
+.btn.sm:hover { color: var(--text); }
+.btn.sm svg { flex: none; }
+.copy-cmd.done { color: var(--green); }
+
+/* ---------- Job states ---------- */
+.badge.bad { background: var(--red-bg); color: var(--red); }
+.badge.ok { background: var(--green-bg); color: var(--green); }
+.badge.run { background: var(--blue-bg); color: var(--blue); }
+.badge.muted { background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
+.bar.bad > span { background: var(--red); }
+.bar.ok > span { background: var(--green); }
+.job-err { display: block; text-decoration: none; }
+a.job-err:hover { text-decoration: underline; }
+.job-err.old { color: var(--muted); }
+.job-top { align-items: center; }
+.spark { display: inline-flex; align-items: center; flex: none; opacity: 0.9; }
+@media (max-width: 420px) { .spark { display: none; } }
+.spark-svg { display: block; }
+.spark-line { fill: none; stroke: var(--chart); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+
+/* ---------- Usage chart marks ---------- */
+.chart-mark line { stroke: var(--border-strong); stroke-width: 1; stroke-dasharray: 2 3; shape-rendering: crispEdges; }
+.chart-mark.start path { fill: var(--green); }
+.chart-mark.stop rect { fill: var(--muted); }
+.tip-event { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--border); }
+.tip-event.start::before { content: "▲ "; color: var(--green); }
+.tip-event.stop::before { content: "■ "; color: var(--muted); }
+
+/* ---------- Metric charts ---------- */
+.metrics-panel { border-bottom: 1px solid var(--border); padding: 10px 14px 4px; }
+.metrics-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.metrics-head .seg { max-width: 100%; overflow-x: auto; }
+.metric-chart { position: relative; }
+/* The log sits right under the chart: square its top corner so the two read as one panel. */
+.metrics-panel:not([hidden]) + .term { border-top-right-radius: 0; }
+.metric-svg { display: block; width: 100%; overflow: visible; }
+
+/* ---------- Logs list and error jump ---------- */
+.pl-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.pl-row .pl-title { flex: 1; min-width: 0; }
+.pl-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--gray-dot); }
+.pl-dot.busy { background: var(--green); }
+.pl-dot.idle { background: var(--amber); }
+.pl-dot.orphan { background: var(--red); }
+.pane-list .badge { height: 18px; padding: 0 6px; font-size: 11px; }
+.term-jump { margin-left: 10px; border: 0; background: none; padding: 0; cursor: pointer; font: inherit; color: #ff9a92; text-decoration: underline; text-underline-offset: 2px; }
+.term-jump:hover { color: #ffc2bd; }
+.tl.flash { box-shadow: inset 3px 0 0 #ff6166; animation: flash 1.6s ease-out; }
+@keyframes flash { 0% { background: #ff615555; } 100% { background: #ff615514; } }
+@media (prefers-reduced-motion: reduce) { .tl.flash { animation: none; } }
+
+/* ---------- Session details drawer ---------- */
+body.drawer-open { overflow: hidden; }
+.drawer-scrim { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, 0.3); }
+.drawer:focus { outline: none; }
+.drawer {
+  position: fixed; z-index: 60; top: 0; right: 0; bottom: 0; width: min(560px, 100vw);
+  display: flex; flex-direction: column; background: var(--surface); border-left: 1px solid var(--border); box-shadow: var(--shadow-md);
+}
+.drawer-head { display: flex; align-items: flex-start; gap: 12px; padding: 18px 20px 16px; border-bottom: 1px solid var(--border); }
+.drawer-titles { flex: 1; min-width: 0; }
+.drawer-head h2 { font-size: 18px; letter-spacing: -0.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.drawer-head h2.faint { color: var(--muted); font-style: italic; font-weight: 500; }
+.drawer-ep { font: 12px var(--mono); color: var(--muted); margin-top: 2px; overflow-wrap: anywhere; }
+#drawer-status { margin-top: 2px; }
+.drawer-body { flex: 1; overflow: auto; padding: 4px 20px 32px; }
+.d-sec { padding-top: 20px; }
+.d-sec h3 { font-size: 12px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin: 0 0 10px; }
+.d-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
+.d-tile { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; min-width: 0; }
+.d-tile-label { font-size: 12.5px; color: var(--text-2); }
+.d-tile-value { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; margin-top: 6px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.d-tile-value .unit { font-size: 12.5px; font-weight: 500; letter-spacing: 0; color: var(--muted); margin-left: 4px; }
+.d-tile-foot { font-size: 12px; color: var(--muted); margin-top: 4px; min-height: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.d-chart-cap { margin-top: 14px; font-size: 12.5px; color: var(--text-2); }
+.d-chart-cap:empty { display: none; }
+.d-chart-cap + .d-chart { margin-top: 4px; }
+.d-facts { display: grid; grid-template-columns: 140px minmax(0, 1fr); margin: 10px 0 0; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.d-facts dt, .d-facts dd { margin: 0; padding: 8px 12px; border-top: 1px solid var(--border); }
+.d-facts dt:first-of-type, .d-facts dt:first-of-type + dd { border-top: 0; }
+.d-facts dt { color: var(--text-2); }
+.d-facts dd { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.d-note { margin: 8px 0 0; font-size: 13px; color: var(--text-2); }
+.d-note code { font: 12px var(--mono); background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+.d-sec > .snippet { display: flex; margin-top: 10px; }
+.d-sec > .snippet code { flex: 1; min-width: 0; }
+.d-job { padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.d-job + .d-job { margin-top: 10px; }
+.d-job .title { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.d-chart { margin-top: 12px; }
+.d-term { margin-top: 12px; background: var(--term-bg); color: var(--term-text); border-radius: 6px; padding: 8px 0; font: 12px/1.6 var(--mono); max-height: 220px; overflow: auto; }
+.d-term .tl { padding: 0 12px; }
+.d-links { margin-top: 10px; }
+.d-history { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.d-history li { display: flex; align-items: center; gap: 10px; padding: 8px 12px; }
+.d-history li + li { border-top: 1px solid var(--border); }
+.d-history .grow { flex: 1; min-width: 0; }
+.d-history .title { font-weight: 500; font-size: 13px; }
+.d-history .meta { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.d-history .meta.err { color: var(--red); font-family: var(--mono); }
+@media (max-width: 640px) {
+  .drawer { border-left: 0; }
+  .drawer-head { padding: 14px 16px; flex-wrap: wrap; }
+  .drawer-body { padding: 0 16px 24px; }
+  .d-tiles { gap: 8px; }
+  .d-tile { padding: 10px; }
+  .d-tile-value { font-size: 17px; }
+  .d-tile-foot { display: none; }
+  .d-facts { grid-template-columns: 96px minmax(0, 1fr); }
+}
+
+/* ---------- Alerts settings ---------- */
+.alerts { display: grid; gap: 4px; padding: 8px 20px 16px; }
+.field { display: grid; grid-template-columns: 160px 150px minmax(0, 1fr); align-items: center; gap: 4px 16px; padding: 8px 0; }
+.field-label { color: var(--text-2); }
+.field-input { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
+.field-input:focus-within { border-color: var(--border-strong); box-shadow: 0 0 0 3px var(--focus-bg); }
+.field-input input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; font-variant-numeric: tabular-nums; appearance: textfield; -moz-appearance: textfield; }
+.field-input input::-webkit-inner-spin-button, .field-input input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.field-input .unit { color: var(--muted); font-size: 12.5px; }
+.field-help { font-size: 12.5px; color: var(--muted); }
+.alerts-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; padding-top: 8px; }
+.field-error { margin-right: auto; color: var(--red); font-size: 13px; }
+.btn.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.btn.primary:hover { opacity: 0.88; background: var(--accent); }
+.notify-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 20px; border-top: 1px solid var(--border); }
+.notify-title { font-weight: 500; }
+.switch.light .track { background: var(--active); }
+.switch.light .track::after { background: var(--surface); box-shadow: var(--shadow-sm); }
+.switch.light input:checked + .track { background: var(--text); }
+.switch.light input:checked + .track::after { background: var(--surface); }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+@media (max-width: 640px) { .field { grid-template-columns: minmax(0, 1fr); } }
 
 footer.foot { margin-top: 40px; font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 16px; justify-content: space-between; }
 
 /* Monospaced text is shown exactly as written: Geist Mono's ligatures would turn "==" into one
    glyph and merge runs like "###". Last in the file, and :is() lifts every selector to the
    specificity of `td.name .ep`, so rules like `details pre { font: ... }` can't undo it. */
-:is(.mono, code, pre, .tag, .term-body, .term-file, .term-status, td.job, td.name .ep, .endpoint, .kv .v, .tli-err, .job-err) {
+:is(.mono, code, pre, .tag, .term-body, .term-file, .term-status, td.job, td.name .ep, .endpoint, .kv .v, .tli-err, .job-err, .drawer-ep, .d-term, .d-history .meta.err) {
   font-variant-ligatures: none;
   font-feature-settings: "liga" 0, "calt" 0;
 }

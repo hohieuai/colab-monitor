@@ -1,4 +1,4 @@
-"""Exhaustive check of what /api/log serves, over every request path up to a bound.
+"""Exhaustive check of what /api/log and /api/metrics serve, over every request path up to a bound.
 
     uv run python verification/log_access/check.py            # check the code as it is
     uv run python verification/log_access/check.py --mutants  # show the check catches broken variants
@@ -16,6 +16,7 @@ alphabet of path pieces, up to MAX_DEPTH pieces, under every configuration, and 
   P2  Every request gets an answer: 200, 400, or 403, never an exception. (robustness)
   P3  Every log that /api/state lists can be opened with /api/log.     (the Logs page works)
   P4  A 200 answer holds the lines of the file the path names.          (the right file is shown)
+  P5  /api/metrics answers every path exactly as /api/log does.         (the charts read no more)
 
 It runs the real code, not a model of it. A pass covers this tree and every path up to the bound.
 """
@@ -32,7 +33,7 @@ from unittest import mock
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
-from colab_monitor import sources  # noqa: E402
+from colab_monitor import metrics, sources  # noqa: E402
 from colab_monitor.server import Dashboard  # noqa: E402
 
 MAX_DEPTH = 3  # folder pieces before the file name; 3 reaches runs/../outside and linkdir/../runs
@@ -104,7 +105,7 @@ def marker_of(lines) -> str | None:
 
 def check(root: pathlib.Path, limit: int = 3) -> dict[str, list[str]]:
     """Counterexamples for each property, at most `limit` each."""
-    failures: dict[str, list[str]] = {"P1": [], "P2": [], "P3": [], "P4": []}
+    failures: dict[str, list[str]] = {"P1": [], "P2": [], "P3": [], "P4": [], "P5": []}
 
     def fail(prop: str, text: str) -> None:
         if len(failures[prop]) < limit:
@@ -131,6 +132,15 @@ def check(root: pathlib.Path, limit: int = 3) -> dict[str, list[str]]:
             if status not in (200, 400, 403):
                 fail("P2", f"{config}: path {shown!r} answers {status}")
                 continue
+            try:
+                metrics_status = app.handle("/api/metrics", {"path": path})[0]
+            except Exception as e:  # noqa: BLE001 - an exception is a different answer
+                metrics_status = f"{type(e).__name__}: {e}"
+            if metrics_status != status:
+                fail(
+                    "P5",
+                    f"{config}: path {shown!r}: /api/log answers {status}, /api/metrics {metrics_status}",
+                )
             if status != 200:
                 continue
             read = marker_of(body["lines"])
@@ -179,6 +189,15 @@ MUTANTS = {
 }
 
 
+# A broken /api/metrics that reads any path it is given. P5 must catch it.
+def _metrics_unchecked(self, query):
+    real = os.path.realpath(os.path.expanduser(query["path"]))
+    try:
+        return 200, {"path": query["path"], "series": metrics.metric_series(sources.tail_lines(real))}
+    except ValueError:
+        return 400, {"error": "bad path"}
+
+
 @contextlib.contextmanager
 def tree():
     with tempfile.TemporaryDirectory() as tmp:
@@ -214,6 +233,12 @@ def main() -> int:
                 if caught:
                     print(f"        {caught[0]}")
                 missed += not caught
+            with mock.patch.object(Dashboard, "_metrics", _metrics_unchecked):
+                caught = check(root, limit=1)["P5"]
+            print(f"{'caught' if caught else 'MISSED'}  /api/metrics skips resolve_log")
+            if caught:
+                print(f"        {caught[0]}")
+            missed += not caught
             return 1 if missed else 0
 
         failures = check(root)
@@ -223,6 +248,7 @@ def main() -> int:
         "P2": "Every request gets an answer",
         "P3": "Every listed log opens",
         "P4": "A 200 answer holds the named file",
+        "P5": "/api/metrics answers as /api/log does",
     }
     for prop, title in titles.items():
         print(f"{'FAIL' if failures[prop] else 'pass'}  {prop}  {title}")
