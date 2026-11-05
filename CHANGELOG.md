@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- `status` and `watch` read the `colab` CLI's OAuth token from the OS keyring first (as current CLI
+  releases do), and only then from the legacy `~/.config/colab-cli/token.json`.
+- Docs and the agent skill describe `--timeout` as an idle limit, and note that `colab ssh` does not
+  show a machine as running.
+
 ### Added
 
 - The agent skill installs as a Claude Code plugin:
@@ -60,8 +67,8 @@ All notable changes to this project are documented here. The format follows
 - A running job whose log ends in an error is failed, not stalled.
 - A new icon, `[*]`: the mark a notebook shows next to a cell that is running.
 - The agent skill reads `colab-monitor status --json` instead of calling the HTTP API.
-- Every `colab run` and `colab exec` example, and the agent skill, pass `--timeout 86400`, so the
-  CLI waits for long jobs without keeping a CPU core busy.
+- Every `colab run` and `colab exec` example, and the agent skill, pass a generous `--timeout` so
+  long silent stretches do not hit the CLI's idle limit.
 
 ### Fixed
 

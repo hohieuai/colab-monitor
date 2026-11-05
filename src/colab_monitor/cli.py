@@ -30,7 +30,11 @@ _DASHBOARD_ERRORS = (OSError, ValueError, http.client.HTTPException)
 _CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 WATCH_POLL_INTERVAL = 60.0
 MAX_JOBS_SHOWN = 8  # the text view; --json lists every log
+# Legacy path used before the colab CLI moved OAuth into the OS keyring.
 TOKEN_PATH = "~/.config/colab-cli/token.json"
+# Must match google-colab-cli's auth.py (service_name / username).
+OAUTH_KEYRING_SERVICE = "google-colab-cli"
+OAUTH_KEYRING_USER = "oauth_token"
 
 STATUS_WORDS = {"busy": "running", "gone": "released"}
 STATUS_COLORS = {"busy": "green", "idle": "yellow", "stopping": "dim", "orphan": "red", "unknown": "dim"}
@@ -181,6 +185,27 @@ def _find_dashboard(args: argparse.Namespace) -> tuple[DashboardSource, dict] | 
         return None
 
 
+def _oauth_token_json() -> str | None:
+    """The colab CLI's saved OAuth token JSON, or None. Never prompts for a new sign-in.
+
+    Newer CLI releases store the token in the OS keyring and delete the legacy
+    `token.json`. Older releases (and a failed keyring write) still use the file.
+    """
+    try:
+        import keyring
+
+        token = keyring.get_password(OAUTH_KEYRING_SERVICE, OAUTH_KEYRING_USER)
+        if token:
+            return token
+    except Exception:  # noqa: BLE001 - missing keyring, locked backend, or other OS error
+        pass
+    path = os.path.expanduser(TOKEN_PATH)
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+    return None
+
+
 def _quiet_session(auth: str):
     """Sign in with saved credentials only. Returns None instead of starting a sign-in."""
     import warnings
@@ -201,10 +226,10 @@ def _quiet_session(auth: str):
     else:
         from google.oauth2.credentials import Credentials
 
-        path = os.path.expanduser(TOKEN_PATH)
-        if not os.path.exists(path):
+        token_json = _oauth_token_json()
+        if not token_json:
             return None
-        creds = Credentials.from_authorized_user_file(path, PUBLIC_SCOPES)
+        creds = Credentials.from_authorized_user_info(json.loads(token_json), PUBLIC_SCOPES)
     if not creds.valid:
         creds.refresh(Request())  # raises if the saved sign-in no longer works
     return AuthorizedSession(creds)

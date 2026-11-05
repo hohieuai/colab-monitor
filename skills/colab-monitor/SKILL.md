@@ -71,8 +71,9 @@ Follow these shared conventions, or the dashboard shows the wrong picture:
 
 ## Sign-in (the thing that blocks agents)
 
-- Colab Monitor reuses the `colab` CLI's sign-in: the OAuth token in `~/.config/colab-cli/token.json`
-  with `--auth oauth2`, or Application Default Credentials with `--auth adc`.
+- Colab Monitor reuses the `colab` CLI's sign-in: OAuth with `--auth oauth2` (stored in the OS
+  keyring as `google-colab-cli` / `oauth_token`, or the legacy file
+  `~/.config/colab-cli/token.json`), or Application Default Credentials with `--auth adc`.
 - If the CLI isn't signed in, the start fails within a second with `Couldn't sign in to Colab`. You
   can't sign in for the user: it opens a browser and waits for a pasted code. Ask the user to run
   `colab sessions` in their terminal (in Claude Code they can type `! colab sessions`), then run the
@@ -93,8 +94,18 @@ colab-monitor status -h >/dev/null 2>&1 \
   || uv tool install --reinstall git+https://github.com/hohieuai/colab-monitor
 mkdir -p ~/colab-runs
 API=http://127.0.0.1:26522 URL=http://localhost:26522 OUT="${TMPDIR:-/tmp}/colab-monitor.log"
-AUTH=oauth2  # same sign-in as the colab CLI: ADC when there is no colab OAuth token
-if [ ! -f ~/.config/colab-cli/token.json ] && { [ -n "${GOOGLE_APPLICATION_CREDENTIALS:-}" ] \
+AUTH=oauth2  # same sign-in as the colab CLI: ADC only when no OAuth token is saved
+if ! python3 -c '
+import os, sys
+try:
+    import keyring
+    if keyring.get_password("google-colab-cli", "oauth_token"):
+        raise SystemExit(0)
+except Exception:
+    pass
+raise SystemExit(0 if os.path.exists(os.path.expanduser("~/.config/colab-cli/token.json")) else 1)
+' \
+  && { [ -n "${GOOGLE_APPLICATION_CREDENTIALS:-}" ] \
     || [ -f ~/.config/gcloud/application_default_credentials.json ]; }; then AUTH=adc; fi
 # A dashboard started before an update has no status report: restart it on the new version.
 if curl -sf "$API/api/state" >/dev/null && ! curl -sf "$API/api/state" | grep -q '"insights"'; then
@@ -125,15 +136,18 @@ fi
 ### Run jobs so they appear in the dashboard
 
 - Redirect every job's output to `~/colab-runs`, named after the session:
-  `nohup colab run --timeout 86400 --gpu T4 -s train train.py > ~/colab-runs/train.log 2>&1 &`. The name links the
-  log to its machine, which is how Colab Monitor notices a running job that has gone silent.
+  `nohup colab run --timeout 86400 --gpu T4 -s train train.py > ~/colab-runs/train.log 2>&1 &`. The
+  name links the log to its machine, which is how Colab Monitor notices a running job that has gone
+  silent.
 - Print progress the way Colab Monitor reads it: a tqdm bar, `step 900/1800`, or `epoch 3/10`, and
   metrics as `loss=0.25`. Then the report shows the job's progress, time left, and loss.
 - Do the same for `colab exec`:
   `colab exec --timeout 86400 -s train -f step.py > ~/colab-runs/train-step.log 2>&1`.
-- Always pass `--timeout 86400`, or any value longer than the job, to `colab run` and `colab exec`.
-  With the default of 30 seconds, the CLI's local client keeps a CPU core busy for the rest of a
-  longer job.
+- `--timeout` on `colab run` and `colab exec` is an idle limit: seconds to wait with no output
+  before failing (`0` means no limit). Jobs that print regularly can keep the default of 30. For
+  long silent phases, pass a larger value such as `86400`, or `--timeout 0`. Prefer `colab run` /
+  `colab exec` over `colab ssh` when you want the dashboard to show the job as running: SSH does not
+  mark the machine busy.
 - The file appears on the **Logs** page within 3 seconds and streams while the job runs.
 
 ### Check on jobs
@@ -162,8 +176,8 @@ for a in r["attention"]:
 
 | `status` | Meaning | What to do |
 |---|---|---|
-| `busy` | The CLI is running a command in the machine. | Wait, or read its log. |
-| `idle` | The machine runs and bills, but nothing runs in it. | If its work is done, stop it with `colab stop -s NAME`. |
+| `busy` | The CLI is running `colab run`, `exec`, `repl`, or `console` in the machine. | Wait, or read its log. |
+| `idle` | The machine runs and bills, but no such command runs (including during `colab ssh`). | If its work is done, stop it with `colab stop -s NAME`. |
 | `stopping` | The CLI stopped it in the last 10 minutes, and the last Colab check still listed it. | Nothing. It usually disappears after the next check; if it is still listed after 10 minutes, it shows as `orphan`. |
 | `orphan` | The machine bills, but the CLI has no record of it. | Tell the user. Release it only with their approval (see **Recovery**). |
 | `unknown` | Colab hasn't been checked yet. | Wait one interval and check again. |
