@@ -77,6 +77,11 @@ To read local files on purpose and hide the message, pass `--no-api`.
 session does not set that flag, so the machine shows as idle even though it still bills. Prefer
 `colab run` / `colab exec` with output redirected to `~/colab-runs` when you want the dashboard to
 track the job.
+## A job failed with "Timeout waiting for output"
+
+That message comes from the `colab` CLI, not from Colab Monitor. `--timeout` on `colab run` and
+`colab exec` is an idle limit: how long the CLI waits with no kernel output. Raise `--timeout`, or
+pass `--timeout 0` for no limit, then start the job again.
 
 ## Make status show the files you passed
 

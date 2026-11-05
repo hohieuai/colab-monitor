@@ -80,8 +80,10 @@ To see a job on the **Logs** page, write its output to a file in `~/colab-runs`:
 colab run --timeout 86400 --gpu T4 -s train train.py > ~/colab-runs/train.log 2>&1
 ```
 
-Set `--timeout` longer than the job, as `86400` (one day) does here. The CLI then waits for the
-job quietly, while the **Logs** page streams its output.
+`--timeout` is how long the CLI may wait with no output from the job (an idle limit). Jobs that
+print regularly can use the default of 30 seconds. For long silent stretches, raise it (as
+`86400` does here) or pass `--timeout 0` for no limit. The **Logs** page streams the redirected
+output while the job runs.
 
 The file appears on the **Logs** page within three seconds, and new lines stream in while the job
 runs. The page shows files that end in `.log`, `.out`, or `.err`. To read a different folder, start
