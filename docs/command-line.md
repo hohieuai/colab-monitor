@@ -156,7 +156,7 @@ colab-monitor status --exit-code > /dev/null || echo "Something needs attention"
 |---|---|---|
 | `~/.config/colab-cli/sessions.json` and other `--config` files | Read | The sessions that the CLI tracks. Colab Monitor removes their access tokens and runtime URLs before it sends anything to the page. |
 | `~/.config/colab-cli/history/*.jsonl` | Read | One file for each session, with the events that the CLI recorded. |
-| `~/.config/colab-cli/token.json` | Read, and updated by `serve` | The CLI's sign-in token. `serve` uses the CLI's own sign-in code, which can refresh the file. `status` and `watch` only read it. |
+| OS keyring entry `google-colab-cli` / `oauth_token`, or legacy `~/.config/colab-cli/token.json` | Read by `status` and `watch`; `serve` uses the CLI's own sign-in | The CLI's OAuth sign-in. Current CLI releases keep it in the OS keyring and remove the legacy file after migrating it. `status` and `watch` read the keyring first, then the file, and never start a new sign-in. |
 | Files from `--log` and `--log-dir` | Read | Job output. The page shows at most the last 2,000 lines of the selected file, read from its last 256 KB. Job progress comes from the last 200 lines. |
 | `~/.config/colab-monitor/usage.jsonl` | Read and appended | One JSON line for each successful Colab check, with the time, the balance, and the usage rate. `serve` removes samples older than 30 days at startup. |
 

@@ -62,8 +62,9 @@ An orphaned machine still uses compute units, and the CLI will not stop it.
 
 ## Fix "Not signed in to Colab" from status or watch
 
-`status` and `watch` use the sign-in that the `colab` CLI saved, and never start a sign-in
-themselves. Without a saved sign-in, they show local files only, with no balance or machines.
+`status` and `watch` use the sign-in that the `colab` CLI saved (the OS keyring, or the legacy
+`~/.config/colab-cli/token.json`), and never start a sign-in themselves. Without a saved sign-in,
+they show local files only, with no balance or machines.
 
 1. Run `colab sessions` and complete the sign-in.
 2. Run `colab-monitor status` again.
