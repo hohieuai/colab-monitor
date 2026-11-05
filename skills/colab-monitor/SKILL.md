@@ -71,8 +71,9 @@ Follow these shared conventions, or the dashboard shows the wrong picture:
 
 ## Sign-in (the thing that blocks agents)
 
-- Colab Monitor reuses the `colab` CLI's sign-in: the OAuth token in `~/.config/colab-cli/token.json`
-  with `--auth oauth2`, or Application Default Credentials with `--auth adc`.
+- Colab Monitor reuses the `colab` CLI's sign-in: OAuth with `--auth oauth2` (stored in the OS
+  keyring as `google-colab-cli` / `oauth_token`, or the legacy file
+  `~/.config/colab-cli/token.json`), or Application Default Credentials with `--auth adc`.
 - If the CLI isn't signed in, the start fails within a second with `Couldn't sign in to Colab`. You
   can't sign in for the user: it opens a browser and waits for a pasted code. Ask the user to run
   `colab sessions` in their terminal (in Claude Code they can type `! colab sessions`), then run the
@@ -93,8 +94,18 @@ colab-monitor status -h >/dev/null 2>&1 \
   || uv tool install --reinstall git+https://github.com/hohieuai/colab-monitor
 mkdir -p ~/colab-runs
 API=http://127.0.0.1:26522 URL=http://localhost:26522 OUT="${TMPDIR:-/tmp}/colab-monitor.log"
-AUTH=oauth2  # same sign-in as the colab CLI: ADC when there is no colab OAuth token
-if [ ! -f ~/.config/colab-cli/token.json ] && { [ -n "${GOOGLE_APPLICATION_CREDENTIALS:-}" ] \
+AUTH=oauth2  # same sign-in as the colab CLI: ADC only when no OAuth token is saved
+if ! python3 -c '
+import os, sys
+try:
+    import keyring
+    if keyring.get_password("google-colab-cli", "oauth_token"):
+        raise SystemExit(0)
+except Exception:
+    pass
+raise SystemExit(0 if os.path.exists(os.path.expanduser("~/.config/colab-cli/token.json")) else 1)
+' \
+  && { [ -n "${GOOGLE_APPLICATION_CREDENTIALS:-}" ] \
     || [ -f ~/.config/gcloud/application_default_credentials.json ]; }; then AUTH=adc; fi
 # A dashboard started before an update has no status report: restart it on the new version.
 if curl -sf "$API/api/state" >/dev/null && ! curl -sf "$API/api/state" | grep -q '"insights"'; then
