@@ -1,22 +1,38 @@
+# Dependabot version updates. Security/malware alerts are separate: enable them in
+# Settings → Security and quality → Dependabot alerts.
 version: 2
 updates:
-  - package-ecosystem: uv
-    directory: /
-    schedule:
-      interval: weekly
-    commit-message:
-      prefix: chore
-      include: scope
-    groups:
-      python:
-        patterns: ["*"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: monthly
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - github-actions
     commit-message:
       prefix: ci
       include: scope
     groups:
-      actions:
-        patterns: ["*"]
+      github-actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - python
+    commit-message:
+      prefix: build
+      include: scope
+    groups:
+      python-production:
+        dependency-type: production
+      python-development:
+        dependency-type: development
