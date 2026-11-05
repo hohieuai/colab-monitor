@@ -8,6 +8,8 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- Docs and the agent skill note that `colab ssh` does not mark a machine as running on the
+  dashboard; prefer `colab run` / `colab exec` when you want job status and logs tracked.
 - Docs and the agent skill describe `--timeout` on `colab run` / `colab exec` as an idle limit
   (seconds without output), not as a wall-clock limit for the whole job.
 - `status` and `watch` read the `colab` CLI's OAuth token from the OS keyring first (as current CLI

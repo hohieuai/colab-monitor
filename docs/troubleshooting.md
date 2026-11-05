@@ -71,6 +71,12 @@ they show local files only, with no balance or machines.
 
 To read local files on purpose and hide the message, pass `--no-api`.
 
+## A machine looks idle while you use `colab ssh`
+
+`Running` means the CLI is in `colab run`, `colab exec`, `colab repl`, or `colab console`. An SSH
+session does not set that flag, so the machine shows as idle even though it still bills. Prefer
+`colab run` / `colab exec` with output redirected to `~/colab-runs` when you want the dashboard to
+track the job.
 ## A job failed with "Timeout waiting for output"
 
 That message comes from the `colab` CLI, not from Colab Monitor. `--timeout` on `colab run` and

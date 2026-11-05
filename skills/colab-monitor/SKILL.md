@@ -143,6 +143,11 @@ fi
   metrics as `loss=0.25`. Then the report shows the job's progress, time left, and loss.
 - Do the same for `colab exec`:
   `colab exec --timeout 86400 -s train -f step.py > ~/colab-runs/train-step.log 2>&1`.
+- Always pass `--timeout 86400`, or any value longer than the job, to `colab run` and `colab exec`.
+  With the default of 30 seconds, the CLI's local client keeps a CPU core busy for the rest of a
+  longer job.
+- Prefer `colab run` / `colab exec` over `colab ssh` when you want the dashboard to show the job as
+  running: SSH does not mark the machine busy.
 - `--timeout` on `colab run` and `colab exec` is an idle limit: seconds to wait with no output
   before failing (`0` means no limit). Jobs that print regularly can keep the default of 30. For
   long silent phases, pass a larger value such as `86400`, or `--timeout 0`.
@@ -174,8 +179,8 @@ for a in r["attention"]:
 
 | `status` | Meaning | What to do |
 |---|---|---|
-| `busy` | The CLI is running a command in the machine. | Wait, or read its log. |
-| `idle` | The machine runs and bills, but nothing runs in it. | If its work is done, stop it with `colab stop -s NAME`. |
+| `busy` | The CLI is running `colab run`, `exec`, `repl`, or `console` in the machine. | Wait, or read its log. |
+| `idle` | The machine runs and bills, but no such command runs (including during `colab ssh`). | If its work is done, stop it with `colab stop -s NAME`. |
 | `stopping` | The CLI stopped it in the last 10 minutes, and the last Colab check still listed it. | Nothing. It usually disappears after the next check; if it is still listed after 10 minutes, it shows as `orphan`. |
 | `orphan` | The machine bills, but the CLI has no record of it. | Tell the user. Release it only with their approval (see **Recovery**). |
 | `unknown` | Colab hasn't been checked yet. | Wait one interval and check again. |

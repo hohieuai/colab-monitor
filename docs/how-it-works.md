@@ -27,9 +27,10 @@ local files on every page refresh and asks Colab on a fixed interval.
 A machine's status comes from comparing Colab's list of machines with the CLI's state file.
 
 - **Running** means that Colab lists the machine and the CLI is running a command in it, such as
-  `colab run` or `colab exec`.
-- **Idle** means that Colab lists the machine and the CLI knows it, but nothing runs in it. An idle
-  machine still uses compute units.
+  `colab run`, `colab exec`, `colab repl`, or `colab console`. `colab ssh` does not count: the
+  machine stays **Idle** on the dashboard while you are connected over SSH.
+- **Idle** means that Colab lists the machine and the CLI knows it, but no such command runs in it.
+  An idle machine still uses compute units.
 - **Stopping** means that the CLI stopped the machine in the last 10 minutes, but the last Colab
   check still listed it. The machine usually disappears after the next check. If Colab still lists
   it 10 minutes after the stop, it shows as an **Orphan**, because the CLI records a stop even when
