@@ -125,15 +125,16 @@ fi
 ### Run jobs so they appear in the dashboard
 
 - Redirect every job's output to `~/colab-runs`, named after the session:
-  `nohup colab run --timeout 86400 --gpu T4 -s train train.py > ~/colab-runs/train.log 2>&1 &`. The name links the
-  log to its machine, which is how Colab Monitor notices a running job that has gone silent.
+  `nohup colab run --timeout 86400 --gpu T4 -s train train.py > ~/colab-runs/train.log 2>&1 &`. The
+  name links the log to its machine, which is how Colab Monitor notices a running job that has gone
+  silent.
 - Print progress the way Colab Monitor reads it: a tqdm bar, `step 900/1800`, or `epoch 3/10`, and
   metrics as `loss=0.25`. Then the report shows the job's progress, time left, and loss.
 - Do the same for `colab exec`:
   `colab exec --timeout 86400 -s train -f step.py > ~/colab-runs/train-step.log 2>&1`.
-- Always pass `--timeout 86400`, or any value longer than the job, to `colab run` and `colab exec`.
-  With the default of 30 seconds, the CLI's local client keeps a CPU core busy for the rest of a
-  longer job.
+- `--timeout` on `colab run` and `colab exec` is an idle limit: seconds to wait with no output
+  before failing (`0` means no limit). Jobs that print regularly can keep the default of 30. For
+  long silent phases, pass a larger value such as `86400`, or `--timeout 0`.
 - The file appears on the **Logs** page within 3 seconds and streams while the job runs.
 
 ### Check on jobs
