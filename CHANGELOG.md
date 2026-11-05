@@ -10,6 +10,8 @@ All notable changes to this project are documented here. The format follows
 
 - Docs and the agent skill note that `colab ssh` does not mark a machine as running on the
   dashboard; prefer `colab run` / `colab exec` when you want job status and logs tracked.
+- `status` and `watch` read the `colab` CLI's OAuth token from the OS keyring first (as current CLI
+  releases do), and only then from the legacy `~/.config/colab-cli/token.json`.
 
 ### Added
 

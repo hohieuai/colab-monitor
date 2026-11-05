@@ -3,6 +3,7 @@
 import json
 import pathlib
 import re
+import sys
 import threading
 import time
 
@@ -526,6 +527,12 @@ class TestSignIn:
 
         monkeypatch.setattr("builtins.input", refuse)
         monkeypatch.setenv("HOME", str(tmp_path))
+        # The OS keyring is process-global; default to empty so tests don't use the developer's token.
+        monkeypatch.setitem(
+            sys.modules,
+            "keyring",
+            type("Keyring", (), {"get_password": staticmethod(lambda service, user: None)})(),
+        )
 
     @staticmethod
     def _token(tmp_path, text='{"token": "t", "refresh_token": "r"}'):
@@ -543,24 +550,107 @@ class TestSignIn:
         err = capsys.readouterr().err
         assert "Not signed in" in err and "colab sessions" in err
 
-    def test_a_valid_saved_token_is_used(self, tmp_path, monkeypatch):
+    def test_a_valid_saved_token_file_is_used(self, tmp_path, monkeypatch):
         from google.oauth2 import credentials
 
         self._token(tmp_path)
+        monkeypatch.setitem(sys.modules, "keyring", None)  # no keyring package
         creds = type("Creds", (), {"valid": True})()
-        monkeypatch.setattr(credentials.Credentials, "from_authorized_user_file", lambda path, scopes: creds)
+        seen = {}
+
+        def from_info(info, scopes):
+            seen["info"] = info
+            return creds
+
+        monkeypatch.setattr(credentials.Credentials, "from_authorized_user_info", from_info)
         made = {}
         monkeypatch.setattr(
             "google.auth.transport.requests.AuthorizedSession", lambda c: made.setdefault("creds", c)
         )
         cli._quiet_session("oauth2")
-        assert made["creds"] is creds
+        assert made["creds"] is creds and seen["info"]["token"] == "t"
+
+    def test_a_token_in_the_os_keyring_is_used(self, tmp_path, monkeypatch):
+        """The colab CLI stores OAuth in the OS keyring and may delete token.json."""
+        from google.oauth2 import credentials
+
+        keyring = type(
+            "Keyring",
+            (),
+            {"get_password": staticmethod(lambda service, user: '{"token": "from-keyring"}')},
+        )()
+        monkeypatch.setitem(sys.modules, "keyring", keyring)
+        creds = type("Creds", (), {"valid": True})()
+        seen = {}
+
+        def from_info(info, scopes):
+            seen["info"] = info
+            return creds
+
+        monkeypatch.setattr(credentials.Credentials, "from_authorized_user_info", from_info)
+        made = {}
+        monkeypatch.setattr(
+            "google.auth.transport.requests.AuthorizedSession", lambda c: made.setdefault("creds", c)
+        )
+        assert cli._quiet_session("oauth2") is not None
+        assert made["creds"] is creds and seen["info"] == {"token": "from-keyring"}
+        assert keyring.get_password(cli.OAUTH_KEYRING_SERVICE, cli.OAUTH_KEYRING_USER)
+
+    def test_keyring_is_preferred_over_a_legacy_token_file(self, tmp_path, monkeypatch):
+        from google.oauth2 import credentials
+
+        self._token(tmp_path, text='{"token": "from-file"}')
+        keyring = type(
+            "Keyring",
+            (),
+            {"get_password": staticmethod(lambda service, user: '{"token": "from-keyring"}')},
+        )()
+        monkeypatch.setitem(sys.modules, "keyring", keyring)
+        seen = {}
+
+        def from_info(info, scopes):
+            seen["info"] = info
+            return type("C", (), {"valid": True})()
+
+        monkeypatch.setattr(credentials.Credentials, "from_authorized_user_info", from_info)
+        monkeypatch.setattr("google.auth.transport.requests.AuthorizedSession", lambda c: c)
+        cli._quiet_session("oauth2")
+        assert seen["info"] == {"token": "from-keyring"}
+
+    def test_keyring_errors_fall_back_to_the_token_file(self, tmp_path, monkeypatch):
+        from google.oauth2 import credentials
+
+        self._token(tmp_path, text='{"token": "from-file"}')
+
+        def boom(service, user):
+            raise RuntimeError("keyring locked")
+
+        monkeypatch.setitem(
+            sys.modules, "keyring", type("Keyring", (), {"get_password": staticmethod(boom)})()
+        )
+        seen = {}
+
+        def from_info(info, scopes):
+            seen["info"] = info
+            return type("C", (), {"valid": True})()
+
+        monkeypatch.setattr(credentials.Credentials, "from_authorized_user_info", from_info)
+        monkeypatch.setattr("google.auth.transport.requests.AuthorizedSession", lambda c: c)
+        cli._quiet_session("oauth2")
+        assert seen["info"]["token"] == "from-file"
+
+    def test_empty_keyring_and_no_token_file_means_not_signed_in(self, monkeypatch):
+        monkeypatch.setitem(
+            sys.modules, "keyring", type("Keyring", (), {"get_password": staticmethod(lambda s, u: None)})()
+        )
+        assert cli._quiet_session("oauth2") is None
 
     def test_a_token_that_cannot_refresh_falls_back(self, tmp_path, monkeypatch, capsys):
         from google.auth.exceptions import RefreshError
         from google.oauth2 import credentials
 
         self._token(tmp_path)
+        monkeypatch.setitem(sys.modules, "keyring", None)
 
         class Expired:
             valid = False
@@ -569,14 +659,24 @@ class TestSignIn:
                 raise RefreshError("invalid_grant: Token has been expired or revoked.")
 
         monkeypatch.setattr(
-            credentials.Credentials, "from_authorized_user_file", lambda path, scopes: Expired()
+            credentials.Credentials, "from_authorized_user_info", lambda info, scopes: Expired()
         )
         assert cli._connect(self._args(), usage_log=None) is None
         err = capsys.readouterr().err
         assert "Couldn't sign in to Colab" in err and "expired or revoked" in err
 
-    def test_a_corrupt_token_file_falls_back(self, tmp_path, capsys):
+    def test_a_corrupt_token_file_falls_back(self, tmp_path, monkeypatch, capsys):
         self._token(tmp_path, text="{not json")
+        monkeypatch.setitem(sys.modules, "keyring", None)
+        assert cli._connect(self._args(), usage_log=None) is None
+        assert "Couldn't sign in to Colab" in capsys.readouterr().err
+
+    def test_a_corrupt_keyring_token_falls_back(self, monkeypatch, capsys):
+        monkeypatch.setitem(
+            sys.modules,
+            "keyring",
+            type("Keyring", (), {"get_password": staticmethod(lambda s, u: "{not json")})(),
+        )
         assert cli._connect(self._args(), usage_log=None) is None
         assert "Couldn't sign in to Colab" in capsys.readouterr().err
 
