@@ -71,6 +71,12 @@ they show local files only, with no balance or machines.
 
 To read local files on purpose and hide the message, pass `--no-api`.
 
+## A job failed with "Timeout waiting for output"
+
+That message comes from the `colab` CLI, not from Colab Monitor. `--timeout` on `colab run` and
+`colab exec` is an idle limit: how long the CLI waits with no kernel output. Raise `--timeout`, or
+pass `--timeout 0` for no limit, then start the job again.
+
 ## Make status show the files you passed
 
 If a dashboard runs, `status` and `watch` show the dashboard's data. When you pass an option that
