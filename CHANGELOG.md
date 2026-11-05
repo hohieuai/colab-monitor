@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Docs and the agent skill note that `colab ssh` does not mark a machine as running on the
+  dashboard; prefer `colab run` / `colab exec` when you want job status and logs tracked.
+
 ### Added
 
 - The agent skill installs as a Claude Code plugin:

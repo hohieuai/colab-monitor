@@ -70,6 +70,13 @@ themselves. Without a saved sign-in, they show local files only, with no balance
 
 To read local files on purpose and hide the message, pass `--no-api`.
 
+## A machine looks idle while you use `colab ssh`
+
+`Running` means the CLI is in `colab run`, `colab exec`, `colab repl`, or `colab console`. An SSH
+session does not set that flag, so the machine shows as idle even though it still bills. Prefer
+`colab run` / `colab exec` with output redirected to `~/colab-runs` when you want the dashboard to
+track the job.
+
 ## Make status show the files you passed
 
 If a dashboard runs, `status` and `watch` show the dashboard's data. When you pass an option that

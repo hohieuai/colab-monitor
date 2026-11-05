@@ -134,6 +134,8 @@ fi
 - Always pass `--timeout 86400`, or any value longer than the job, to `colab run` and `colab exec`.
   With the default of 30 seconds, the CLI's local client keeps a CPU core busy for the rest of a
   longer job.
+- Prefer `colab run` / `colab exec` over `colab ssh` when you want the dashboard to show the job as
+  running: SSH does not mark the machine busy.
 - The file appears on the **Logs** page within 3 seconds and streams while the job runs.
 
 ### Check on jobs
@@ -162,8 +164,8 @@ for a in r["attention"]:
 
 | `status` | Meaning | What to do |
 |---|---|---|
-| `busy` | The CLI is running a command in the machine. | Wait, or read its log. |
-| `idle` | The machine runs and bills, but nothing runs in it. | If its work is done, stop it with `colab stop -s NAME`. |
+| `busy` | The CLI is running `colab run`, `exec`, `repl`, or `console` in the machine. | Wait, or read its log. |
+| `idle` | The machine runs and bills, but no such command runs (including during `colab ssh`). | If its work is done, stop it with `colab stop -s NAME`. |
 | `stopping` | The CLI stopped it in the last 10 minutes, and the last Colab check still listed it. | Nothing. It usually disappears after the next check; if it is still listed after 10 minutes, it shows as `orphan`. |
 | `orphan` | The machine bills, but the CLI has no record of it. | Tell the user. Release it only with their approval (see **Recovery**). |
 | `unknown` | Colab hasn't been checked yet. | Wait one interval and check again. |
