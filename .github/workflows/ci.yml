@@ -15,9 +15,12 @@ concurrency:
 jobs:
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
       - run: uv sync --locked
       - run: uv run ruff format --check .
       - run: uv run ruff check .
@@ -25,6 +28,7 @@ jobs:
   test:
     name: test (${{ matrix.os }}, Python ${{ matrix.python }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -35,6 +39,7 @@ jobs:
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           python-version: ${{ matrix.python }}
+          enable-cache: true
       - run: uv sync --locked
       # Browser tests prefer the runner's Chrome and fall back to Playwright's Chromium.
       - run: uv run playwright install --with-deps chromium
@@ -49,9 +54,12 @@ jobs:
 
   package:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
       - run: uv build
       - name: Install the wheel into a clean environment and smoke-test it
         run: scripts/smoke_test.sh dist/*.whl
