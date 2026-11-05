@@ -10,6 +10,8 @@ All notable changes to this project are documented here. The format follows
 
 - Docs and the agent skill describe `--timeout` on `colab run` / `colab exec` as an idle limit
   (seconds without output), not as a wall-clock limit for the whole job.
+- `status` and `watch` read the `colab` CLI's OAuth token from the OS keyring first (as current CLI
+  releases do), and only then from the legacy `~/.config/colab-cli/token.json`.
 
 ### Added
 
