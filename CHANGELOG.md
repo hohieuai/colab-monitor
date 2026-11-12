@@ -6,20 +6,33 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-### Changed
+## [0.0.1] - 2026-11-13
 
-- CI runs one job, on Linux with Python 3.12, for pull requests and on demand. The macOS and
-  packaging jobs, the pull request title check, and Dependabot version updates are off.
-  `.github/CODEOWNERS` routes review to the maintainer.
-- Docs and the agent skill note that `colab ssh` does not mark a machine as running on the
-  dashboard; prefer `colab run` / `colab exec` when you want job status and logs tracked.
-- Docs and the agent skill describe `--timeout` on `colab run` / `colab exec` as an idle limit
-  (seconds without output), not as a wall-clock limit for the whole job.
-- `status` and `watch` read the `colab` CLI's OAuth token from the OS keyring first (as current CLI
-  releases do), and only then from the legacy `~/.config/colab-cli/token.json`.
+First release. Builds installed from `main` before this release reported version 0.1.0. The
+Changed and Fixed lists describe what differs from those builds.
 
 ### Added
 
+- **Overview:** compute-unit balance, usage rate, runway at the current rate, machines on your
+  account, a usage chart (usage rate or balance over 1 hour, 24 hours, 7 days or 30 days, with
+  hover details and a table view), active machines and recent activity.
+- **Sessions:** every machine on your account with its status (running, idle, stopping, orphan or
+  released), hardware, current job and last run, with status filters and search. Shown as cards on
+  phones.
+- **Logs:** live output from job log files with line numbers, error and warning highlighting,
+  filtering, follow mode, copy and download. Progress bars collapse to their latest state and
+  terminal colour codes are removed.
+- **History:** a timeline of what the colab CLI recorded for each session: code, output, images
+  and errors.
+- **Settings:** light, dark or system theme, and connection and data-source details.
+- Warnings for orphaned machines and for failed Colab checks, with the last good data kept on screen.
+- At most two Colab requests per interval however many tabs are open, with backoff on errors.
+- `colab-monitor` command with `--port`, `--interval`, `--log`, `--log-dir`, `--auth`, `--no-api`,
+  `--open` and `--version`. Opens the running dashboard if it's already started.
+- Security: local-only by default, DNS-rebinding guard, tokens never sent to the browser, strict
+  Content Security Policy, bundled fonts (no third-party requests).
+- Documentation: a command-line reference, an explanation of how the dashboard works, and a
+  troubleshooting guide.
 - The agent skill installs as a Claude Code plugin:
   `/plugin install colab-monitor --marketplace hohieuai/colab-monitor`.
 - `colab-monitor status` prints what runs, what it costs, how jobs are doing, and what needs
@@ -65,6 +78,15 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- CI runs one job, on Linux with Python 3.12, for pull requests and on demand. The macOS and
+  packaging jobs, the pull request title check, and Dependabot version updates are off.
+  `.github/CODEOWNERS` routes review to the maintainer.
+- Docs and the agent skill note that `colab ssh` does not mark a machine as running on the
+  dashboard; prefer `colab run` / `colab exec` when you want job status and logs tracked.
+- Docs and the agent skill describe `--timeout` on `colab run` / `colab exec` as an idle limit
+  (seconds without output), not as a wall-clock limit for the whole job.
+- `status` and `watch` read the `colab` CLI's OAuth token from the OS keyring first (as current CLI
+  releases do), and only then from the legacy `~/.config/colab-cli/token.json`.
 - `colab-monitor` takes a command: `serve`, `status`, or `watch`. Without one it starts the
   dashboard as before, so existing commands keep working.
 - The red orphan banner is now part of the **Needs attention** list. Each orphan carries its own
@@ -97,32 +119,5 @@ All notable changes to this project are documented here. The format follows
 - The **Logs** page no longer lists a symlink that leads out of the log folder, which it could not
   open.
 
-## [0.1.0] - 2026-10-24
-
-First release.
-
-### Added
-
-- **Overview:** compute-unit balance, usage rate, runway at the current rate, machines on your
-  account, a usage chart (usage rate or balance over 1 hour, 24 hours, 7 days or 30 days, with
-  hover details and a table view), active machines and recent activity.
-- **Sessions:** every machine on your account with its status (running, idle, stopping, orphan or
-  released), hardware, current job and last run, with status filters and search. Shown as cards on
-  phones.
-- **Logs:** live output from job log files with line numbers, error and warning highlighting,
-  filtering, follow mode, copy and download. Progress bars collapse to their latest state and
-  terminal colour codes are removed.
-- **History:** a timeline of what the colab CLI recorded for each session: code, output, images
-  and errors.
-- **Settings:** light, dark or system theme, and connection and data-source details.
-- Warnings for orphaned machines and for failed Colab checks, with the last good data kept on screen.
-- At most two Colab requests per interval however many tabs are open, with backoff on errors.
-- `colab-monitor` command with `--port`, `--interval`, `--log`, `--log-dir`, `--auth`, `--no-api`,
-  `--open` and `--version`. Opens the running dashboard if it's already started.
-- Security: local-only by default, DNS-rebinding guard, tokens never sent to the browser, strict
-  Content Security Policy, bundled fonts (no third-party requests).
-- Documentation: a command-line reference, an explanation of how the dashboard works, and a
-  troubleshooting guide.
-
-[Unreleased]: https://github.com/hohieuai/colab-monitor/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/hohieuai/colab-monitor/releases/tag/v0.1.0
+[Unreleased]: https://github.com/hohieuai/colab-monitor/compare/v0.0.1...HEAD
+[0.0.1]: https://github.com/hohieuai/colab-monitor/releases/tag/v0.0.1
