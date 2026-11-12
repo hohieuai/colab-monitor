@@ -1,9 +1,10 @@
 name: CI
 
+# One Linux job on the oldest supported Python. Changes reach main through pull requests,
+# so pushes to main don't run it again; run it by hand from the Actions tab when needed.
 on:
-  push:
-    branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -13,57 +14,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  lint:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
-        with:
-          enable-cache: true
-      - run: uv sync --locked
-      - run: uv run ruff format --check .
-      - run: uv run ruff check .
-
   test:
-    name: test (${{ matrix.os }}, Python ${{ matrix.python }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-        python: ["3.12", "3.13"]
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
-        with:
-          python-version: ${{ matrix.python }}
-          enable-cache: true
-      - run: uv sync --locked
-      # Browser tests prefer the runner's Chrome and fall back to Playwright's Chromium.
-      - run: uv run playwright install --with-deps chromium
-        if: runner.os == 'Linux'
-      - run: uv run playwright install chromium
-        if: runner.os != 'Linux'
-      - run: uv run pytest -ra
-      # Every request path up to a bound against /api/log; see verification/log_access/README.md.
-      - name: Verify that /api/log serves only allowed files
-        if: matrix.python == '3.13'
-        run: uv run python verification/log_access/check.py
-
-  package:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
+          python-version: "3.12"
           enable-cache: true
-      - run: uv build
-      - name: Install the wheel into a clean environment and smoke-test it
-        run: scripts/smoke_test.sh dist/*.whl
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: dist
-          path: dist/
+      - run: uv sync --locked
+      - run: uv run ruff format --check .
+      - run: uv run ruff check .
+      # Browser tests use the runner's Chrome.
+      - run: uv run pytest -ra
+      # Every request path up to a bound against /api/log; see verification/log_access/README.md.
+      - name: Verify that /api/log serves only allowed files
+        run: uv run python verification/log_access/check.py

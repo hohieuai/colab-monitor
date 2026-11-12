@@ -8,8 +8,8 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
-- Dependabot runs weekly on Mondays, groups GitHub Actions and Python production/development
-  updates into fewer PRs, and labels them. CI jobs have timeouts and cache uv.
+- CI runs one job, on Linux with Python 3.12, for pull requests and on demand. The macOS and
+  packaging jobs, the pull request title check, and Dependabot version updates are off.
   `.github/CODEOWNERS` routes review to the maintainer.
 - Docs and the agent skill note that `colab ssh` does not mark a machine as running on the
   dashboard; prefer `colab run` / `colab exec` when you want job status and logs tracked.

@@ -25,7 +25,7 @@ meant to catch. Fix the check before you trust a pass.
 At the sync commit, all five properties pass and `--mutants` prints `caught` four times. Any
 `FAIL` is new.
 
-CI runs the first command on every pull request, on Linux and macOS.
+CI runs the first command on every pull request, on Linux.
 
 ## What the check covers
 
