@@ -1,6 +1,6 @@
 {
   "name": "colab-monitor",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "Set up and use Colab Monitor, the local dashboard and terminal monitor for Colab sessions run with the colab CLI.",
   "author": {
     "name": "The Colab Monitor Authors",
