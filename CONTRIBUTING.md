@@ -84,8 +84,7 @@ caught it.
 ## Pull requests
 
 Pull requests are squash-merged, so the title becomes the commit message on `main`. Write the title
-in [Conventional Commits](https://www.conventionalcommits.org/) form. A check fails the pull
-request otherwise.
+in [Conventional Commits](https://www.conventionalcommits.org/) form.
 
 | Type | Use it for |
 |---|---|
