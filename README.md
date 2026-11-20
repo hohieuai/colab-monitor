@@ -154,6 +154,13 @@ On Claude Code versions before 2.1.275, add the marketplace first, then install 
 `claude plugin update colab-monitor` installs newer versions. For another agent, copy
 `skills/colab-monitor/SKILL.md` into that agent's skills folder.
 
+## Related project
+
+[colab-vllm-server](https://github.com/hohieuai/colab-vllm-server) runs an OpenAI-compatible vLLM
+endpoint for an open-weight model on a Colab GPU. It writes the server's log to `~/colab-runs/`, so
+Colab Monitor streams the log and shows what the endpoint's machine costs per hour. An endpoint
+bills until you stop it, even when it gets no requests.
+
 ## Documentation
 
 - The [command-line reference](docs/command-line.md) lists every command and option, the exit
