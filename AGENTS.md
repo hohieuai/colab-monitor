@@ -44,7 +44,8 @@ Browser tests need Chrome or Playwright's Chromium (`uv run playwright install c
   testing, use a CPU runtime, and stop it afterwards. `colab sessions` must show no sessions you
   started.
 - **Keep versions in sync.** `.claude-plugin/plugin.json` must have the same version as
-  `src/colab_monitor/__init__.py`, and a test checks this.
+  `src/colab_monitor/__init__.py`, and every install command must install that release
+  (`@vX.Y.Z`). Tests check both. CONTRIBUTING.md lists the release steps.
 - **Schema 1 is a contract.** Add fields to `colab-monitor status --json`, but never rename or
   remove one.
 

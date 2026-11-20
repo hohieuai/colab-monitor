@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The install commands in the README and the agent skill install the latest release, `v0.0.2`,
+  instead of whatever is on `main`.
+- Each GitHub release has the wheel and sdist attached, built and checked by a new Release
+  workflow.
+
 ## [0.0.2] - 2026-11-21
 
 A new look built on shadcn/ui's components, a command menu, a new logo, and support for `colab`

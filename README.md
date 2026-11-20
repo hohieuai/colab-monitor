@@ -58,7 +58,7 @@ to the `colab` CLI by running `colab sessions` once. Colab Monitor reuses that s
 1. Install Colab Monitor:
 
    ```bash
-   uv tool install git+https://github.com/hohieuai/colab-monitor
+   uv tool install git+https://github.com/hohieuai/colab-monitor@v0.0.2
    ```
 
 2. Create the folder that the **Logs** page reads:
