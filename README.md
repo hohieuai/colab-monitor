@@ -1,6 +1,9 @@
 <div align="center">
 
-<img src="src/colab_monitor/static/icon.svg" width="72" height="72" alt="">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/logo-dark.svg">
+  <img src="docs/images/logo-light.svg" width="72" height="72" alt="">
+</picture>
 
 # Colab Monitor
 

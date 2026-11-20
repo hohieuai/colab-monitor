@@ -79,6 +79,9 @@ caught it.
   Colab. The page runs under a strict Content Security Policy with no inline scripts.
 - **UI changes:** check light and dark mode and a phone width, and add a browser test. If the change
   is visible in the README tour, regenerate it with `uv run python scripts/demo_gif.py`.
+- **The logo** is computed, not drawn by hand. To change it, edit the numbers in
+  `scripts/make_logo.py` and run `uv run python scripts/make_logo.py`. It writes the dashboard's
+  icons and the README's light and dark marks.
 - Update `CHANGELOG.md` under *Unreleased* for any user-visible change.
 
 ## Pull requests
