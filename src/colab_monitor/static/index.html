@@ -4,53 +4,58 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Colab Monitor</title>
-<link rel="icon" href="/favicon.svg?v=4" type="image/svg+xml">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=4">
-<meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)">
+<link rel="icon" href="/favicon.svg?v=5" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=5">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
 <script src="/theme.js"></script>
-<link rel="preload" href="/fonts/Geist-Variable.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/Inter-Latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
 <div class="app" id="app">
   <aside class="sidebar" id="sidebar" aria-label="Main">
-    <div class="brand">
-      <img class="brand-mark" src="/icon.svg" width="28" height="28" alt="">
-      <div class="brand-name">Colab Monitor</div>
+    <div class="sidebar-header">
+      <a class="brand" href="#/overview">
+        <img class="brand-mark" src="/icon.svg" width="26" height="26" alt="">
+        <span class="brand-name">Colab Monitor</span>
+      </a>
     </div>
+    <div class="sidebar-content">
+    <div class="sidebar-group">
+    <div class="nav-label">Monitor</div>
     <nav class="nav" id="nav">
       <a href="#/overview" data-route="overview"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg>Overview</a>
       <a href="#/sessions" data-route="sessions"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="2.5" width="13" height="4" rx="1"/><rect x="1.5" y="9.5" width="13" height="4" rx="1"/><path d="M4 4.5h.01M4 11.5h.01" stroke-width="2" stroke-linecap="round"/></svg>Sessions<span class="count" id="nav-sessions" hidden></span></a>
       <a href="#/logs" data-route="logs"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M4.5 6.5l2 1.5-2 1.5M8 10h3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Logs<span class="count" id="nav-logs" hidden></span></a>
       <a href="#/history" data-route="history"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5" stroke-linecap="round"/></svg>History</a>
     </nav>
-    <div class="nav-label">Workspace</div>
-    <nav class="nav">
-      <a href="#/settings" data-route="settings"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 4.5h7M12 4.5h2M2 11.5h2M7 11.5h7"/><circle cx="10.5" cy="4.5" r="1.5"/><circle cx="5.5" cy="11.5" r="1.5"/></svg>Settings</a>
-    </nav>
+    </div>
+    </div>
     <div class="sidebar-foot">
-      <div class="conn">
-        <div class="conn-row"><span class="dot" id="conn-dot"></span><span id="conn-title">Connecting…</span></div>
-        <div class="conn-sub" id="conn-sub">Waiting for the dashboard server</div>
-      </div>
+      <nav class="foot-nav" aria-label="Workspace">
+        <a href="#/settings" data-route="settings"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 4.5h7M12 4.5h2M2 11.5h2M7 11.5h7"/><circle cx="10.5" cy="4.5" r="1.5"/><circle cx="5.5" cy="11.5" r="1.5"/></svg>Settings</a>
+      </nav>
       <div class="seg theme-seg" role="group" aria-label="Theme">
-        <button type="button" data-theme-choice="system" aria-label="System theme" title="System"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="2.5" width="13" height="9" rx="1.5"/><path d="M5 14h6"/></svg></button>
-        <button type="button" data-theme-choice="light" aria-label="Light theme" title="Light"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="3"/><path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3 3l1 1M12 12l1 1M3 13l1-1M12 4l1-1" stroke-linecap="round"/></svg></button>
-        <button type="button" data-theme-choice="dark" aria-label="Dark theme" title="Dark"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M13.5 9.5A5.5 5.5 0 016.5 2.5a5.5 5.5 0 107 7z" stroke-linejoin="round"/></svg></button>
+        <button type="button" data-theme-choice="system" aria-label="System theme" data-tooltip="System"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="2.5" width="13" height="9" rx="1.5"/><path d="M5 14h6"/></svg></button>
+        <button type="button" data-theme-choice="light" aria-label="Light theme" data-tooltip="Light"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="3"/><path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3 3l1 1M12 12l1 1M3 13l1-1M12 4l1-1" stroke-linecap="round"/></svg></button>
+        <button type="button" data-theme-choice="dark" aria-label="Dark theme" data-tooltip="Dark"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M13.5 9.5A5.5 5.5 0 016.5 2.5a5.5 5.5 0 107 7z" stroke-linejoin="round"/></svg></button>
       </div>
     </div>
   </aside>
   <div class="scrim" id="scrim"></div>
 
   <div class="content">
-    <div class="mobile-bar">
-      <button class="btn icon" type="button" id="menu-btn" aria-label="Open navigation"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/></svg></button>
-      <img class="brand-mark" style="width:24px;height:24px;border-radius:6px" src="/icon.svg" width="24" height="24" alt="">
-      <span class="brand-name">Colab Monitor</span>
-      <span style="flex:1"></span>
-      <span class="dot" id="mobile-dot"></span>
-    </div>
+    <header class="site-header">
+      <button class="btn ghost icon" type="button" id="menu-btn" aria-label="Toggle sidebar" aria-controls="sidebar" aria-expanded="true" data-tooltip="Toggle sidebar" data-shortcut="B"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M6 2.5v11"/></svg></button>
+      <span class="vsep" aria-hidden="true"></span>
+      <div class="conn" id="conn">
+        <span class="dot" id="conn-dot"></span>
+        <span class="conn-text"><span class="conn-title" id="conn-title">Connecting…</span><span class="conn-sub" id="conn-sub">Waiting for the dashboard server</span></span>
+      </div>
+      <span class="grow"></span>
+      <button class="search-trigger" type="button" id="cmdk-open" aria-haspopup="dialog" aria-controls="cmdk" aria-label="Search pages, machines and logs"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14" stroke-linecap="round"/></svg><span class="search-label">Search…</span><kbd class="kbd" data-shortcut-label="K">Ctrl K</kbd></button>
+    </header>
 
     <!-- Overview -->
     <main class="page" id="page-overview" data-page="overview">
@@ -59,7 +64,6 @@
           <h1>Overview</h1>
           <div class="lede" id="lede">Loading your Colab account…</div>
         </div>
-        <span class="meta-pill"><span class="dot" id="checked-dot"></span><span id="checked-text">Connecting…</span></span>
       </div>
 
       <div class="notice api-notice" hidden>
@@ -69,42 +73,46 @@
           <div class="notice-body"></div>
         </div>
       </div>
-      <section class="attention" id="attention" aria-labelledby="attention-title" hidden>
-        <div class="attention-head">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.5L15 14H1L8 1.5z" stroke-linejoin="round"/><path d="M8 6v3.5M8 11.5v.5" stroke-linecap="round"/></svg>
-          <h2 id="attention-title">Needs attention</h2>
+      <section class="attention" id="attention" role="alert" aria-labelledby="attention-title" hidden>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.5L15 14H1L8 1.5z" stroke-linejoin="round"/><path d="M8 6v3.5M8 11.5v.5" stroke-linecap="round"/></svg>
+        <div class="attention-body">
+          <h2 class="attention-title" id="attention-title">Needs attention</h2>
+          <ul class="attention-list" id="attention-list"></ul>
+          <div class="attention-hint" id="orphan-hint" hidden>The colab CLI can't stop an orphan, so each one comes with the command that releases it.
+            Colab Monitor never runs a command for you.</div>
         </div>
-        <ul class="attention-list" id="attention-list"></ul>
-        <div class="attention-hint" id="orphan-hint" hidden>The colab CLI can't stop an orphan, so each one comes with the command that releases it.
-          Colab Monitor never runs a command for you.</div>
       </section>
 
       <section class="stats" aria-label="Compute units">
         <div class="card stat">
-          <div class="stat-label"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="3.5" width="13" height="9" rx="1.5"/><path d="M1.5 6.5h13"/></svg>Compute units</div>
-          <div class="stat-value" id="s-balance">–</div>
+          <div class="stat-label">Compute units</div>
+          <div class="stat-value" id="s-balance"><span class="skeleton value"></span></div>
           <div class="stat-foot" id="s-balance-foot">Balance</div>
         </div>
         <div class="card stat">
-          <div class="stat-label"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 12l4-4 3 3 5-6" stroke-linecap="round" stroke-linejoin="round"/></svg>Usage rate</div>
-          <div class="stat-value" id="s-rate">–</div>
+          <div class="stat-label">Usage rate</div>
+          <div class="stat-value" id="s-rate"><span class="skeleton value"></span></div>
           <div class="stat-foot" id="s-rate-foot">Units per hour, all machines</div>
         </div>
         <div class="card stat">
-          <div class="stat-label"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8.5" r="5.5"/><path d="M8 5.5v3l2 1M6.5 1.5h3" stroke-linecap="round"/></svg>Runway</div>
-          <div class="stat-value" id="s-runway">–</div>
+          <div class="stat-label">Runway</div>
+          <div class="stat-value" id="s-runway"><span class="skeleton value"></span></div>
           <div class="stat-foot" id="s-runway-foot">At the current rate</div>
         </div>
         <div class="card stat">
-          <div class="stat-label"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.5" y="2.5" width="11" height="11" rx="2"/><rect x="5.5" y="5.5" width="5" height="5" rx="0.5"/></svg>Machines</div>
-          <div class="stat-value" id="s-machines">–</div>
+          <div class="stat-label">Machines</div>
+          <div class="stat-value" id="s-machines"><span class="skeleton value"></span></div>
           <div class="stat-foot" id="s-machines-foot">On your account</div>
         </div>
       </section>
 
-      <div class="section-row">
-        <h2>Usage</h2>
-        <div class="tools">
+      <section class="card chart-card">
+        <div class="card-head">
+          <div>
+            <h2>Usage</h2>
+            <p class="card-desc" id="chart-caption"></p>
+          </div>
+          <div class="tools">
           <div class="seg" role="group" aria-label="Measure" id="measure-seg">
             <button type="button" data-measure="rate" aria-pressed="true">Usage rate</button>
             <button type="button" data-measure="balance" aria-pressed="false">Balance</button>
@@ -115,9 +123,8 @@
             <button type="button" data-range="7d" aria-pressed="false">7d</button>
             <button type="button" data-range="30d" aria-pressed="false">30d</button>
           </div>
+          </div>
         </div>
-      </div>
-      <section class="card">
         <div class="chart-wrap" id="chart-wrap">
           <svg id="chart" role="img" aria-label="Compute units over time"></svg>
           <div class="tooltip" id="tooltip" hidden></div>
@@ -130,8 +137,7 @@
           </div>
         </div>
         <div class="chart-foot">
-          <span id="chart-caption"></span>
-          <button class="linkbtn" type="button" id="table-toggle">View as table</button>
+          <button class="btn ghost sm" type="button" id="table-toggle">View as table</button>
         </div>
         <div class="table-wrap" id="chart-table" hidden>
           <table>
@@ -143,23 +149,23 @@
 
       <div class="split">
         <section class="card">
-          <div class="card-head"><h2>Active machines</h2><a class="link" href="#/sessions">View all sessions →</a></div>
-          <ul class="rows" id="ov-sessions"></ul>
+          <div class="card-head"><div><h2>Active machines</h2><p class="card-desc">Machines that use compute units now</p></div><a class="btn ghost sm link-arrow" href="#/sessions">All sessions<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a></div>
+          <ul class="rows" id="ov-sessions"><li class="skel-row" aria-hidden="true"><span class="skeleton sq"></span><span class="skel-lines"><span class="skeleton line"></span><span class="skeleton line short"></span></span></li><li class="skel-row" aria-hidden="true"><span class="skeleton sq"></span><span class="skel-lines"><span class="skeleton line"></span><span class="skeleton line short"></span></span></li><li class="skel-row" aria-hidden="true"><span class="skeleton sq"></span><span class="skel-lines"><span class="skeleton line"></span><span class="skeleton line short"></span></span></li></ul>
         </section>
         <section class="card">
-          <div class="card-head"><h2>Recent activity</h2><a class="link" href="#/history">View history →</a></div>
-          <ul class="rows" id="ov-activity"></ul>
+          <div class="card-head"><div><h2>Recent activity</h2><p class="card-desc">What the colab CLI recorded</p></div><a class="btn ghost sm link-arrow" href="#/history">History<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a></div>
+          <ul class="rows" id="ov-activity"><li class="skel-row" aria-hidden="true"><span class="skeleton sq"></span><span class="skel-lines"><span class="skeleton line"></span><span class="skeleton line short"></span></span></li><li class="skel-row" aria-hidden="true"><span class="skeleton sq"></span><span class="skel-lines"><span class="skeleton line"></span><span class="skeleton line short"></span></span></li><li class="skel-row" aria-hidden="true"><span class="skeleton sq"></span><span class="skel-lines"><span class="skeleton line"></span><span class="skeleton line short"></span></span></li></ul>
         </section>
       </div>
 
       <div class="split">
         <section class="card">
-          <div class="card-head"><h2>Jobs</h2><a class="link" href="#/logs">View logs →</a></div>
-          <ul class="rows jobs" id="ov-jobs"></ul>
+          <div class="card-head"><div><h2>Jobs</h2><p class="card-desc">Most recently updated first</p></div><a class="btn ghost sm link-arrow" href="#/logs">Logs<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a></div>
+          <ul class="rows jobs" id="ov-jobs"><li class="skel-row" aria-hidden="true"><span class="skeleton sq"></span><span class="skel-lines"><span class="skeleton line"></span><span class="skeleton line short"></span></span></li><li class="skel-row" aria-hidden="true"><span class="skeleton sq"></span><span class="skel-lines"><span class="skeleton line"></span><span class="skeleton line short"></span></span></li></ul>
         </section>
         <section class="card">
-          <div class="card-head"><h2>Spending</h2><span class="faint small" id="spend-since"></span></div>
-          <dl class="figures" id="ov-spend"></dl>
+          <div class="card-head"><div><h2>Spending</h2><p class="card-desc" id="spend-since">Compute units used</p></div></div>
+          <dl class="figures" id="ov-spend"><dt aria-hidden="true"><span class="skeleton line"></span></dt><dd aria-hidden="true"><span class="skeleton line"></span></dd><dt aria-hidden="true"><span class="skeleton line"></span></dt><dd aria-hidden="true"><span class="skeleton line"></span></dd><dt aria-hidden="true"><span class="skeleton line"></span></dt><dd aria-hidden="true"><span class="skeleton line"></span></dd><dt aria-hidden="true"><span class="skeleton line"></span></dt><dd aria-hidden="true"><span class="skeleton line"></span></dd></dl>
         </section>
       </div>
     </main>
@@ -193,7 +199,7 @@
         <div class="table-wrap" id="sessions-table">
           <table>
             <thead><tr><th>Name</th><th>Status</th><th>Hardware</th><th class="num">Uptime</th><th class="num">Idle</th><th class="num">Rate</th><th class="num">Cost</th><th>Job</th><th class="col-last">Last run</th></tr></thead>
-            <tbody id="sessions-body"></tbody>
+            <tbody id="sessions-body"><tr class="skel-tr" aria-hidden="true"><td colspan="9"><span class="skeleton line"></span></td></tr><tr class="skel-tr" aria-hidden="true"><td colspan="9"><span class="skeleton line"></span></td></tr><tr class="skel-tr" aria-hidden="true"><td colspan="9"><span class="skeleton line"></span></td></tr></tbody>
           </table>
         </div>
         <div class="empty" id="sessions-empty" hidden>
@@ -214,7 +220,7 @@
         </div>
       </div>
       <section class="card pane">
-        <div class="pane-list" id="log-list" aria-label="Log files"></div>
+        <div class="pane-list" id="log-list" aria-label="Log files"><div class="skel-row" aria-hidden="true"><span class="skel-lines"><span class="skeleton line"></span><span class="skeleton line short"></span></span></div><div class="skel-row" aria-hidden="true"><span class="skel-lines"><span class="skeleton line"></span><span class="skeleton line short"></span></span></div><div class="skel-row" aria-hidden="true"><span class="skel-lines"><span class="skeleton line"></span><span class="skeleton line short"></span></span></div></div>
         <div class="pane-main">
           <div class="metrics-panel" id="log-metrics" hidden>
             <div class="metrics-head">
@@ -229,8 +235,8 @@
               <div class="term-tools">
                 <label class="search"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14" stroke-linecap="round"/></svg><input id="log-filter" type="search" placeholder="Filter lines" aria-label="Filter log lines"></label>
                 <label class="switch"><input type="checkbox" id="follow" checked><span class="track"></span>Follow</label>
-                <button class="btn icon" type="button" id="log-copy" title="Copy visible lines" aria-label="Copy visible lines"></button>
-                <button class="btn icon" type="button" id="log-download" title="Download the lines shown" aria-label="Download the lines shown"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v8M4.5 7L8 10.5 11.5 7M2.5 13.5h11"/></svg></button>
+                <button class="btn icon" type="button" id="log-copy" aria-label="Copy visible lines" data-tooltip="Copy visible lines"></button>
+                <button class="btn icon" type="button" id="log-download" aria-label="Download the lines shown" data-tooltip="Download the lines shown"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v8M4.5 7L8 10.5 11.5 7M2.5 13.5h11"/></svg></button>
               </div>
             </div>
             <div class="term-body" id="log-view"></div>
@@ -249,7 +255,7 @@
         </div>
       </div>
       <section class="card pane">
-        <div class="pane-list" id="history-list-pane" aria-label="Sessions"></div>
+        <div class="pane-list" id="history-list-pane" aria-label="Sessions"><div class="skel-row" aria-hidden="true"><span class="skel-lines"><span class="skeleton line"></span><span class="skeleton line short"></span></span></div><div class="skel-row" aria-hidden="true"><span class="skel-lines"><span class="skeleton line"></span><span class="skeleton line short"></span></span></div><div class="skel-row" aria-hidden="true"><span class="skel-lines"><span class="skeleton line"></span><span class="skeleton line short"></span></span></div></div>
         <div class="pane-main"><ul class="timeline" id="timeline"></ul></div>
       </section>
     </main>
@@ -264,7 +270,7 @@
       </div>
       <div class="settings">
         <section class="card">
-          <div class="card-head"><h2>Appearance</h2></div>
+          <div class="card-head"><div><h2>Appearance</h2><p class="card-desc">Choose how the dashboard looks in this browser.</p></div></div>
           <div class="card-body">
             <div class="theme-cards">
               <button class="theme-card" type="button" data-theme-choice="system"><div class="swatch system"></div>System</button>
@@ -274,17 +280,17 @@
           </div>
         </section>
         <section class="card">
-          <div class="card-head"><h2>Alerts</h2><span class="faint small">This browser only</span></div>
+          <div class="card-head"><div><h2>Alerts</h2><p class="card-desc">When something needs attention. Saved in this browser only.</p></div></div>
           <form class="alerts" id="alerts-form" novalidate>
-            <label class="field"><span class="field-label">Idle machine</span>
-              <span class="field-input"><input type="number" id="alert-idle" name="idle_alert" min="1" step="any" inputmode="decimal" required><span class="unit">min</span></span>
-              <span class="field-help">A machine that runs nothing for this long needs attention.</span></label>
-            <label class="field"><span class="field-label">Silent job</span>
-              <span class="field-input"><input type="number" id="alert-stall" name="stall_alert" min="1" step="any" inputmode="decimal" required><span class="unit">min</span></span>
-              <span class="field-help">A running job whose log prints nothing for this long.</span></label>
-            <label class="field"><span class="field-label">Runway</span>
-              <span class="field-input"><input type="number" id="alert-runway" name="runway_alert" min="1" step="any" inputmode="decimal" required><span class="unit">hours</span></span>
-              <span class="field-help">Compute units that run out sooner than this.</span></label>
+            <label class="field"><span class="field-content"><span class="field-label">Idle machine</span>
+              <span class="field-help" id="alert-idle-help">A machine that runs nothing for this long needs attention.</span></span>
+              <span class="field-input"><input type="number" id="alert-idle" name="idle_alert" min="1" step="any" inputmode="decimal" required aria-describedby="alert-idle-help"><span class="unit">min</span></span></label>
+            <label class="field"><span class="field-content"><span class="field-label">Silent job</span>
+              <span class="field-help" id="alert-stall-help">A running job whose log prints nothing for this long.</span></span>
+              <span class="field-input"><input type="number" id="alert-stall" name="stall_alert" min="1" step="any" inputmode="decimal" required aria-describedby="alert-stall-help"><span class="unit">min</span></span></label>
+            <label class="field"><span class="field-content"><span class="field-label">Runway</span>
+              <span class="field-help" id="alert-runway-help">Compute units that run out sooner than this.</span></span>
+              <span class="field-input"><input type="number" id="alert-runway" name="runway_alert" min="1" step="any" inputmode="decimal" required aria-describedby="alert-runway-help"><span class="unit">hours</span></span></label>
             <div class="alerts-foot">
               <span class="field-error" id="alerts-error" role="alert"></span>
               <button class="btn" type="button" id="alerts-reset">Reset to defaults</button>
@@ -300,12 +306,12 @@
           </div>
         </section>
         <section class="card">
-          <div class="card-head"><h2>Colab connection</h2><span class="status" id="set-api-status"></span></div>
-          <div class="kv" id="set-api"></div>
+          <div class="card-head"><div><h2>Colab connection</h2><p class="card-desc">How the dashboard checks your account.</p></div><span class="status" id="set-api-status"></span></div>
+          <div class="kv" id="set-api"><div class="k" aria-hidden="true"><span class="skeleton line"></span></div><div class="v" aria-hidden="true"><span class="skeleton line"></span></div><div class="k" aria-hidden="true"><span class="skeleton line"></span></div><div class="v" aria-hidden="true"><span class="skeleton line"></span></div><div class="k" aria-hidden="true"><span class="skeleton line"></span></div><div class="v" aria-hidden="true"><span class="skeleton line"></span></div></div>
         </section>
         <section class="card">
-          <div class="card-head"><h2>Data sources</h2></div>
-          <div class="kv" id="set-sources"></div>
+          <div class="card-head"><div><h2>Data sources</h2><p class="card-desc">Files that Colab Monitor reads on this computer.</p></div></div>
+          <div class="kv" id="set-sources"><div class="k" aria-hidden="true"><span class="skeleton line"></span></div><div class="v" aria-hidden="true"><span class="skeleton line"></span></div><div class="k" aria-hidden="true"><span class="skeleton line"></span></div><div class="v" aria-hidden="true"><span class="skeleton line"></span></div><div class="k" aria-hidden="true"><span class="skeleton line"></span></div><div class="v" aria-hidden="true"><span class="skeleton line"></span></div></div>
         </section>
         <section class="card">
           <div class="card-head"><h2>About</h2></div>
@@ -330,10 +336,24 @@
       <div class="drawer-ep" id="drawer-ep"></div>
     </div>
     <span id="drawer-status"></span>
-    <button class="btn icon" type="button" id="drawer-close" aria-label="Close details"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
+    <button class="btn ghost icon" type="button" id="drawer-close" aria-label="Close details" data-tooltip="Close" data-shortcut="Esc"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
   </div>
   <div class="drawer-body" id="drawer-body"></div>
 </aside>
+
+<div class="cmdk-scrim" id="cmdk-scrim" hidden></div>
+<div class="cmdk" id="cmdk" role="dialog" aria-modal="true" aria-label="Search the dashboard" hidden>
+  <div class="cmdk-input-wrap">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14" stroke-linecap="round"/></svg>
+    <input id="cmdk-input" type="text" role="combobox" aria-expanded="true" aria-controls="cmdk-list" aria-autocomplete="list" autocomplete="off" spellcheck="false" placeholder="Search pages, machines, logs and history…">
+    <kbd class="kbd">Esc</kbd>
+  </div>
+  <div class="cmdk-list" id="cmdk-list" role="listbox" aria-label="Results"></div>
+  <div class="cmdk-empty" id="cmdk-empty" hidden>No results found.</div>
+  <div class="cmdk-foot" aria-hidden="true"><span><kbd class="kbd">↑</kbd><kbd class="kbd">↓</kbd> to move</span><span><kbd class="kbd">↵</kbd> to open</span><span><kbd class="kbd">Esc</kbd> to close</span></div>
+</div>
+<section class="toaster" id="toaster" aria-label="Notifications" aria-live="polite"></section>
+<div class="tip" id="tip" role="tooltip" hidden></div>
 
 <script src="/app.js"></script>
 </body>

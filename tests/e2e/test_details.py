@@ -168,6 +168,7 @@ def test_phone_details_fill_the_screen(page_factory, site):
     open_route(page, site, "sessions", "#sessions-body tr")
     page.locator("#sessions-body tr", has_text="train-gpu").locator("td.st").tap()
     _drawer(page)
+    page.wait_for_timeout(400)  # the details slide in from the side
     box = page.locator("#drawer").bounding_box()
     assert box["x"] == 0 and box["width"] == 390
     page.wait_for_selector("#drawer .d-chart svg")

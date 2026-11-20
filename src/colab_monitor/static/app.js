@@ -86,7 +86,26 @@
     dot: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="2.5"/></svg>',
     close: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>',
     chip: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3.5" y="3.5" width="9" height="9" rx="1.5"/><path d="M6 1.5v2M10 1.5v2M6 12.5v2M10 12.5v2M1.5 6h2M1.5 10h2M12.5 6h2M12.5 10h2"/></svg>',
+    clock: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.5 1.5" stroke-linecap="round"/></svg>',
+    terminal: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M4.5 6.5l2 1.5-2 1.5M8 10h3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    warn: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.5L15 14H1L8 1.5z" stroke-linejoin="round"/><path d="M8 6v3.5M8 11.5v.5" stroke-linecap="round"/></svg>',
+    info: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.25"/><path d="M8 7.5V11M8 5h.01" stroke-linecap="round"/></svg>',
+    ok: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.25"/><path d="M5.5 8.25l1.75 1.75 3.25-3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    spinner: '<svg class="spinner" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M14 8a6 6 0 11-6-6"/></svg>',
+    sun: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="3"/><path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3 3l1 1M12 12l1 1M3 13l1-1M12 4l1-1" stroke-linecap="round"/></svg>',
+    moon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M13.5 9.5A5.5 5.5 0 016.5 2.5a5.5 5.5 0 107 7z" stroke-linejoin="round"/></svg>',
+    monitor: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="2.5" width="13" height="9" rx="1.5"/><path d="M5 14h6"/></svg>',
   };
+  const skel = (cls) => el("span", { className: `skeleton ${cls}`, attrs: { "aria-hidden": "true" } });
+  // An empty state: an icon, what is missing, and what to do about it.
+  const emptyState = (tag, ic, title, desc, ...more) => el(tag, { className: "empty" },
+    ic ? el("div", { className: "empty-icon" }, icon(ic)) : null,
+    el("div", { className: "empty-title", textContent: title }),
+    desc ? el("div", { className: "empty-desc", textContent: desc }) : null, ...more);
+  // ⌘ on a Mac, Ctrl elsewhere; the page accepts either.
+  const MAC = /mac|iphone|ipad/i.test(navigator.userAgentData?.platform ?? navigator.platform ?? "");
+  const shortcut = (key) => (MAC ? `⌘${key}` : `Ctrl ${key}`);
+  for (const k of document.querySelectorAll("[data-shortcut-label]")) k.textContent = shortcut(k.dataset.shortcutLabel);
 
   /* ---------- State ---------- */
   let state = null;
@@ -114,13 +133,44 @@
     if (b) applyTheme(b.dataset.themeChoice);
   });
 
+  /* ---------- Toasts ---------- */
+  // Short messages at the bottom right that go away on their own; hovering one keeps it.
+  const TOAST_ICON = { success: ICON.ok, error: ICON.err, warning: ICON.warn, info: ICON.info };
+  function toast(title, { description, tone = "default", code = false, action, duration = 4000 } = {}) {
+    const box = $("toaster");
+    const dismiss = () => {
+      clearTimeout(timer);
+      if (!node.isConnected || node.classList.contains("leaving")) return;
+      node.classList.add("leaving");
+      setTimeout(() => node.remove(), 160);
+    };
+    const node = el("div", { className: `toast ${tone}`, attrs: tone === "error" ? { role: "alert" } : {} },
+      TOAST_ICON[tone] ? el("span", { className: "toast-icon" }, icon(TOAST_ICON[tone])) : null,
+      el("div", { className: "toast-body" },
+        el("div", { className: "toast-title", textContent: title }),
+        description ? el("div", { className: `toast-desc${code ? " code" : ""}`, textContent: description }) : null),
+      action ? el("button", { className: "btn sm toast-action", type: "button", textContent: action.label, onclick: () => { dismiss(); action.run(); } }) : null,
+      el("button", { className: "toast-close", type: "button", innerHTML: ICON.close, onclick: dismiss, attrs: { "aria-label": "Dismiss" } }));
+    let timer = setTimeout(dismiss, duration);
+    node.addEventListener("pointerenter", () => clearTimeout(timer));
+    node.addEventListener("pointerleave", () => { clearTimeout(timer); timer = setTimeout(dismiss, 2000); });
+    node.addEventListener("focusin", () => clearTimeout(timer));
+    box.append(node);
+    while (box.children.length > 3) box.firstElementChild.remove();
+    return dismiss;
+  }
+  const copyFailed = () => toast("Couldn't copy", { tone: "error", description: "The browser blocked the clipboard. Select the text and copy it yourself." });
+
   /* ---------- Copy buttons ---------- */
   function flashCheck(btn, restore) { btn.innerHTML = ICON.check; setTimeout(() => (btn.innerHTML = restore), 1200); }
   for (const btn of document.querySelectorAll(".copy")) btn.innerHTML = ICON.copy;
   document.addEventListener("click", async (e) => {
     const btn = e.target.closest(".copy");
     if (!btn) return;
-    try { await navigator.clipboard.writeText(btn.parentElement.querySelector("code").textContent); flashCheck(btn, ICON.copy); } catch {}
+    const text = btn.parentElement.querySelector("code").textContent;
+    try { await navigator.clipboard.writeText(text); } catch { copyFailed(); return; }
+    flashCheck(btn, ICON.copy);
+    toast("Copied to clipboard", { tone: "success", description: text, code: true });
   });
   // A small button that copies a command; the command itself is in its tooltip.
   const copyCommand = (cmd, label, key) => el("button", { className: "btn sm copy-cmd", type: "button", title: cmd, dataset: { cmd, label, key } },
@@ -128,17 +178,16 @@
   document.addEventListener("click", async (e) => {
     const btn = e.target.closest(".copy-cmd");
     if (!btn) return;
-    try {
-      await navigator.clipboard.writeText(btn.dataset.cmd);
-      btn.classList.add("done");
-      btn.replaceChildren(icon(ICON.check), el("span", { textContent: "Copied" }));
-      setTimeout(() => { btn.classList.remove("done"); btn.replaceChildren(icon(ICON.copy), el("span", { textContent: btn.dataset.label })); }, 1500);
-    } catch {}
+    try { await navigator.clipboard.writeText(btn.dataset.cmd); } catch { copyFailed(); return; }
+    btn.classList.add("done");
+    btn.replaceChildren(icon(ICON.check), el("span", { textContent: "Copied" }));
+    setTimeout(() => { btn.classList.remove("done"); btn.replaceChildren(icon(ICON.copy), el("span", { textContent: btn.dataset.label })); }, 1500);
+    toast("Copied to clipboard", { tone: "success", description: btn.dataset.cmd, code: true });
   });
   // A command with a button that copies it. Colab Monitor shows commands; it never runs them.
   const snippet = (cmd, label = "Copy command", key = cmd) => el("div", { className: "snippet" },
     el("code", { textContent: cmd, title: cmd }),
-    el("button", { className: "btn icon copy", type: "button", innerHTML: ICON.copy, dataset: { key }, attrs: { "aria-label": label, title: label } }));
+    el("button", { className: "btn icon copy", type: "button", innerHTML: ICON.copy, dataset: { key, tooltip: label }, attrs: { "aria-label": label } }));
 
   /* ---------- Router ---------- */
   const ROUTES = ["overview", "sessions", "logs", "history", "settings"];
@@ -164,8 +213,35 @@
     if (pageChanged) tick(true);
   }
   window.addEventListener("hashchange", onRoute);
-  $("menu-btn").addEventListener("click", () => $("app").classList.add("nav-open"));
-  $("scrim").addEventListener("click", () => $("app").classList.remove("nav-open"));
+
+  /* ---------- Sidebar ---------- */
+  // On a wide window the sidebar collapses off the side and stays that way; on a phone it opens over the page.
+  const phone = window.matchMedia("(max-width: 900px)");
+  function syncSidebar() {
+    const open = phone.matches ? $("app").classList.contains("nav-open") : document.documentElement.dataset.sidebar !== "collapsed";
+    $("menu-btn").setAttribute("aria-expanded", String(open));
+  }
+  function toggleSidebar() {
+    if (phone.matches) $("app").classList.toggle("nav-open");
+    else {
+      const collapsed = document.documentElement.dataset.sidebar !== "collapsed";
+      if (collapsed) { document.documentElement.dataset.sidebar = "collapsed"; store.set("sidebar", "collapsed"); }
+      else { delete document.documentElement.dataset.sidebar; store.del("sidebar"); }
+    }
+    syncSidebar();
+  }
+  $("menu-btn").addEventListener("click", toggleSidebar);
+  $("scrim").addEventListener("click", () => { $("app").classList.remove("nav-open"); syncSidebar(); });
+  phone.addEventListener("change", syncSidebar);
+  new MutationObserver(syncSidebar).observe($("app"), { attributes: true, attributeFilter: ["class"] });
+  syncSidebar();
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && $("app").classList.contains("nav-open")) { $("app").classList.remove("nav-open"); return; }
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "b" && !selectedSession) {
+      e.preventDefault();
+      toggleSidebar();
+    }
+  });
 
   const STATUS = {
     busy: ["Running", "job in progress"],
@@ -194,7 +270,7 @@
   }
 
   let favicon = null;
-  fetch("/favicon.svg?v=4").then((r) => r.text()).then((t) => { favicon = t; updateTitle(); }).catch(() => {});
+  fetch("/favicon.svg?v=5").then((r) => r.text()).then((t) => { favicon = t; updateTitle(); }).catch(() => {});
   let iconKey = "";
   function updateTitle() {
     const items = state?.insights?.attention ?? [];
@@ -227,11 +303,10 @@
     if (!api.enabled) { title = "Local only"; sub = "Started with --no-api"; }
     else if (api.error) { cls = "dot bad"; title = "Colab unreachable"; sub = `Retrying in ${Math.round(api.next_poll_in ?? 0)}s`; }
     else { cls = "dot ok"; title = "Connected"; sub = `Checked ${checked} · every ${Math.round(api.interval)}s`; }
-    for (const id of ["conn-dot", "mobile-dot", "checked-dot"]) $(id).className = cls;
+    $("conn-dot").className = cls;
     $("conn-title").textContent = title;
     $("conn-sub").textContent = sub;
-    $("conn-sub").parentElement.title = api.error ?? "";
-    $("checked-text").textContent = api.enabled ? (api.error ? "Colab check failed" : `Updated ${checked}`) : "Local files only";
+    $("conn").title = api.error ?? `${title}. ${sub}`;
     for (const v of document.querySelectorAll(".app-version-only")) v.textContent = `Version ${state.version}`;
   }
 
@@ -252,8 +327,11 @@
 
     renderAttention(state.insights);
 
-    $("s-balance").replaceChildren(u ? fmt(u.balance) : "–");
-    $("s-rate").replaceChildren(...(u ? [fmt(u.rate_per_hour), el("span", { className: "unit", textContent: "/ hr" })] : ["–"]));
+    // Before Colab's first answer the numbers are coming, not unknown.
+    const waiting = api.enabled && !u && !api.error;
+    const none = () => (waiting ? skel("value") : "–");
+    $("s-balance").replaceChildren(u ? fmt(u.balance) : none());
+    $("s-rate").replaceChildren(...(u ? [fmt(u.rate_per_hour), el("span", { className: "unit", textContent: "/ hr" })] : [none()]));
     const spent = state.insights.spend.today;
     $("s-rate-foot").textContent = spent != null ? `${fmt(spent)} spent today` : "Units per hour, all machines";
     const runway = $("s-runway");
@@ -265,19 +343,17 @@
       const empty = state.insights.runway.empty_at;
       $("s-runway-foot").textContent = empty ? `Runs out ${when(empty * 1000)}` : "At the current rate";
     } else {
-      runway.replaceChildren(u ? "No burn" : "–");
+      runway.replaceChildren(u ? "No burn" : none());
       $("s-runway-foot").textContent = u ? "Nothing is billing right now" : "At the current rate";
     }
-    $("s-machines").textContent = api.enabled && u ? String(live.length) : "–";
+    $("s-machines").replaceChildren(api.enabled && u ? String(live.length) : none());
     $("s-machines-foot").textContent = live.length
       ? [counts.busy && `${counts.busy} running`, counts.idle && `${counts.idle} idle`, counts.orphan && `${counts.orphan} orphan`, counts.stopping && `${counts.stopping} stopping`].filter(Boolean).join(" · ")
       : "On your account";
 
     const list = $("ov-sessions");
     if (!live.length) {
-      list.replaceChildren(el("li", { className: "empty", style: "display:block" },
-        el("div", { className: "empty-title", textContent: "No machines running" }),
-        el("div", { className: "empty-desc", textContent: "Start a job and it appears here within a minute." })));
+      list.replaceChildren(emptyState("li", ICON.chip, "No machines running", "Start a job and it appears here within a minute."));
     } else {
       replaceKeepingFocus(list, live.map((s) => el("li", { className: "clickable", dataset: { endpoint: s.endpoint } },
         el("span", { className: `ev-icon ${s.status === "busy" ? "run" : s.status === "orphan" ? "bad" : ""}` }, icon(ICON.chip)),
@@ -312,9 +388,8 @@
       if (a.command) actions.push(copyCommand(a.command, a.kind === "orphan" ? "Copy release command" : a.kind === "idle" ? "Copy stop command" : "Copy command", `cmd|${a.kind}|${a.subject}`));
       return el("li", { dataset: { kind: a.kind, subject: a.subject } },
         el("span", { className: `sev ${a.severity}` }),
-        el("div", { className: "att-body" },
-          el("div", { className: "att-msg", textContent: a.message }),
-          actions.length ? el("div", { className: "att-actions" }, ...actions) : null));
+        el("div", { className: "att-msg", textContent: a.message }),
+        actions.length ? el("div", { className: "att-actions" }, ...actions) : null);
     }));
     $("orphan-hint").hidden = !items.some((a) => a.kind === "orphan");
   }
@@ -324,13 +399,13 @@
     const machine = a.endpoint ? state.sessions.find((s) => s.endpoint === a.endpoint)
       : a.session ? state.sessions.find((s) => s.name === a.session && s.status !== "gone") : null;
     const key = (what) => ({ key: `${what}|${a.kind}|${a.subject}` });
-    if (machine) links.push(el("a", { className: "link", href: sessionHref(machine.endpoint), textContent: "Details", dataset: key("details") }));
+    if (machine) links.push(el("a", { className: "btn sm", href: sessionHref(machine.endpoint), textContent: "Details", dataset: key("details") }));
     if (a.path) {
-      const open = el("a", { className: "link", href: "#/logs", textContent: a.kind === "failed" ? "Show error" : "Open log", dataset: key("log") });
+      const open = el("a", { className: "btn sm", href: "#/logs", textContent: a.kind === "failed" ? "Show error" : "Open log", dataset: key("log") });
       open.addEventListener("click", () => { openLog(a.path); jumpToError = a.kind === "failed"; });
       links.push(open);
     } else if (a.kind === "failed" && a.session) {
-      const open = el("a", { className: "link", href: "#/history", textContent: "View history", dataset: key("history") });
+      const open = el("a", { className: "btn sm", href: "#/history", textContent: "View history", dataset: key("history") });
       open.addEventListener("click", () => { selectedHistory = a.session; store.set("history", a.session); });
       links.push(open);
     }
@@ -352,9 +427,7 @@
   function renderJobs(jobs) {
     const list = $("ov-jobs");
     if (!jobs.length) {
-      list.replaceChildren(el("li", { className: "empty", style: "display:block" },
-        el("div", { className: "empty-title", textContent: "No job logs" }),
-        el("div", { className: "empty-desc", textContent: `Send a job's output to ${shortDir(state.log_dirs[0] ?? "~/colab-runs")} to follow it here.` })));
+      list.replaceChildren(emptyState("li", ICON.file, "No job logs", `Send a job's output to ${shortDir(state.log_dirs[0] ?? "~/colab-runs")} to follow it here.`));
       return;
     }
     const newest = [...jobs].sort((a, b) => (a.silent_s ?? Infinity) - (b.silent_s ?? Infinity)).slice(0, 6);
@@ -408,7 +481,7 @@
     $("ov-spend").replaceChildren(...rows.flatMap(([k, v]) => [el("dt", { textContent: k }), el("dd", {}, ...[v].flat())]));
     // Spend counts only what the dashboard saw, so say when that started.
     const since = s.measured_since;
-    $("spend-since").textContent = since && since * 1000 > Date.now() - 29 * 86400e3 ? `Measured since ${when(since * 1000)}` : "";
+    $("spend-since").textContent = since && since * 1000 > Date.now() - 29 * 86400e3 ? `Compute units, measured since ${when(since * 1000)}` : "Compute units used";
   }
 
   const EVENT = {
@@ -445,9 +518,7 @@
       activityKey = key;
       const list = $("ov-activity");
       if (!data.events.length) {
-        list.replaceChildren(el("li", { className: "empty", style: "display:block" },
-          el("div", { className: "empty-title", textContent: "No activity yet" }),
-          el("div", { className: "empty-desc", textContent: "Events appear as you use the colab CLI." })));
+        list.replaceChildren(emptyState("li", ICON.clock, "No activity yet", "Events appear as you use the colab CLI."));
         return;
       }
       list.replaceChildren(...data.events.map((ev) => {
@@ -541,8 +612,9 @@
       const cx = X(best[0]), cy = Y(best[2]);
       cross.setAttribute("x1", cx); cross.setAttribute("x2", cx); cross.setAttribute("visibility", "visible");
       dot.setAttribute("cx", cx); dot.setAttribute("cy", cy); dot.setAttribute("visibility", "visible");
-      tip.replaceChildren(el("div", { className: "tv" }, el("span", { className: "key" }), `${s.name} ${num(best[2])}`),
-        el("div", { textContent: best[1] != null ? `step ${best[1].toLocaleString()} · line ${best[0].toLocaleString()}` : `line ${best[0].toLocaleString()}` }));
+      tip.replaceChildren(
+        el("div", { className: "tip-label", textContent: best[1] != null ? `step ${best[1].toLocaleString()} · line ${best[0].toLocaleString()}` : `line ${best[0].toLocaleString()}` }),
+        el("div", { className: "tip-row" }, el("span", { className: "key" }), `${s.name} `, el("span", { className: "tip-val", textContent: num(best[2]) })));
       tip.hidden = false;
       const scale = rect.width / W, half = tip.offsetWidth / 2;
       tip.style.left = `${Math.min(Math.max(cx * scale, half + 4), box.clientWidth - half - 4)}px`;
@@ -690,7 +762,12 @@
     const hit = sv("rect", { class: "chart-hit", x: m.l, y: m.t, width: iw, height: ih + 1 });
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     svg.setAttribute("aria-label", `${measure === "rate" ? "Usage rate" : "Compute unit balance"} over ${span}; latest ${valueFmt(lastP.v)}`);
-    svg.replaceChildren(grid, area, marks, line, axis, cross, end, endLabel, hoverDot, hit);
+    // The area under the line fades to the axis.
+    const defs = sv("defs");
+    const fade = sv("linearGradient", { id: "usage-fill", x1: 0, y1: 0, x2: 0, y2: 1 });
+    fade.append(sv("stop", { offset: "0%", class: "chart-fill-top" }), sv("stop", { offset: "100%", class: "chart-fill-bottom" }));
+    defs.append(fade);
+    svg.replaceChildren(defs, grid, area, marks, line, axis, cross, end, endLabel, hoverDot, hit);
 
     const tip = $("tooltip");
     const show = (evt) => {
@@ -705,8 +782,8 @@
       // Machines that started or stopped within a few pixels of the pointer.
       const near = events.filter((e) => Math.abs(X(e.ms) - px) <= 8);
       tip.replaceChildren(
-        el("div", { className: "tv" }, el("span", { className: "key" }), valueFmt(best.v)),
-        el("div", { textContent: `${measure === "rate" ? "Usage rate" : "Balance"} · ${fullTime(best.t)}` }),
+        el("div", { className: "tip-label", textContent: fullTime(best.t) }),
+        el("div", { className: "tip-row" }, el("span", { className: "key" }), `${measure === "rate" ? "Usage rate" : "Balance"} `, el("span", { className: "tip-val", textContent: valueFmt(best.v) })),
         ...near.map((e) => el("div", { className: `tip-event ${e.kind}`, textContent: `${e.name} ${e.kind === "start" ? "started" : "stopped"} · ${e.hardware} · ${new Date(e.ms).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}` })));
       tip.hidden = false;
       const scale = rect.width / W;
@@ -832,9 +909,7 @@
     $("logs-lede").title = state.log_dirs.join("\n");
     $("logs-lede").textContent = `Live output from *.log, *.out and *.err files in ${dirs.join(", ") || "your log folders"}.`;
     if (!state.logs.length) {
-      pane.replaceChildren(el("div", { className: "empty", style: "padding:24px 8px" },
-        el("div", { className: "empty-title", textContent: "No log files" }),
-        el("div", { className: "empty-desc", textContent: `Send a job's output to ${dirs[0] ?? "~/colab-runs"}.` })));
+      pane.replaceChildren(emptyState("div", ICON.terminal, "No log files", `Send a job's output to ${dirs[0] ?? "~/colab-runs"}.`));
       return;
     }
     const jobs = Object.fromEntries(state.insights.jobs.map((j) => [j.path, j]));
@@ -849,14 +924,15 @@
           el("div", { className: "pl-title", textContent: l.name }),
           j && ["failed", "stalled", "finished"].includes(j.state) ? jobBadge(j) : null),
         el("div", { className: "pl-meta", textContent: l.exists ? [pct, j?.session && `on ${j.session}`, bytes(l.size), rel(l.mtime * 1000)].filter(Boolean).join(" · ") : "missing" }));
-      b.addEventListener("click", () => {
-        if (selectedLog === l.path) return;
-        selectedLog = l.path; store.set("log", l.path); logKey = null; logLines = []; errIndex = -1;
-        $("log-view").replaceChildren(el("div", { className: "term-empty", textContent: "Loading…" }));
-        renderLogList(); refreshLog(true);
-      });
+      b.addEventListener("click", () => { if (selectedLog !== l.path) showLog(l.path); });
       return b;
     }));
+  }
+  // Switch the Logs page to another file.
+  function showLog(path) {
+    selectedLog = path; store.set("log", path); logKey = null; logLines = []; errIndex = -1;
+    $("log-view").replaceChildren(el("div", { className: "term-empty" }, icon(ICON.spinner), "Loading…"));
+    renderLogList(); refreshLog(true);
   }
   // The same rule as the server's metrics.py: exceptions, tracebacks, out of memory, and lines that
   // start with error, fatal, or failed. Metric names such as val_error are not errors.
@@ -996,7 +1072,10 @@
   $("log-copy").innerHTML = ICON.copy;
   $("log-copy").addEventListener("click", async () => {
     const q = $("log-filter").value.toLowerCase();
-    try { await navigator.clipboard.writeText(logLines.filter((l) => !q || l.toLowerCase().includes(q)).join("\n")); flashCheck($("log-copy"), ICON.copy); } catch {}
+    const lines = logLines.filter((l) => !q || l.toLowerCase().includes(q));
+    try { await navigator.clipboard.writeText(lines.join("\n")); } catch { copyFailed(); return; }
+    flashCheck($("log-copy"), ICON.copy);
+    toast(`Copied ${plural(lines.length, "line")}`, { tone: "success", description: selectedLog ? baseName(selectedLog) : undefined });
   });
   $("log-download").addEventListener("click", () => {
     if (!selectedLog) return;
@@ -1015,7 +1094,7 @@
     const pane = $("history-list-pane");
     if (!state.history.includes(selectedHistory)) selectedHistory = state.history[0] ?? null;
     if (!state.history.length) {
-      pane.replaceChildren(el("div", { className: "empty", style: "padding:24px 8px" }, el("div", { className: "empty-title", textContent: "No sessions yet" })));
+      pane.replaceChildren(emptyState("div", ICON.clock, "No sessions yet"));
       return;
     }
     const byName = Object.fromEntries(state.sessions.filter((s) => s.name).map((s) => [s.name, s]));
@@ -1024,19 +1103,20 @@
       const b = el("button", { type: "button", dataset: { key: name }, attrs: { "aria-current": String(name === selectedHistory) } },
         el("div", { className: "pl-title", textContent: name }),
         el("div", { className: "pl-meta", textContent: s && LIVE.has(s.status) ? `${STATUS[s.status][0]} · ${hardware(s)}` : "Ended" }));
-      b.addEventListener("click", () => {
-        if (selectedHistory === name) return;
-        selectedHistory = name; store.set("history", name); historyKey = null;
-        $("timeline").replaceChildren(el("li", { className: "empty" }, el("div", { className: "empty-desc", textContent: "Loading…" })));
-        renderHistoryList(); refreshHistory();
-      });
+      b.addEventListener("click", () => { if (selectedHistory !== name) showHistory(name); });
       return b;
     }));
+  }
+  // Switch the History page to another session.
+  function showHistory(name) {
+    selectedHistory = name; store.set("history", name); historyKey = null;
+    $("timeline").replaceChildren(el("li", { className: "empty" }, el("div", { className: "empty-desc" }, icon(ICON.spinner), " Loading…")));
+    renderHistoryList(); refreshHistory();
   }
   async function refreshHistory() {
     const list = $("timeline");
     if (!selectedHistory) {
-      list.replaceChildren(el("li", { className: "empty" }, el("div", { className: "empty-title", textContent: "No history yet" }), el("div", { className: "empty-desc", textContent: "Sessions appear here after you use the colab CLI." })));
+      list.replaceChildren(emptyState("li", ICON.clock, "No history yet", "Sessions appear here after you use the colab CLI."));
       return;
     }
     const requested = selectedHistory;
@@ -1047,12 +1127,12 @@
       if (key === historyKey) return;
       historyKey = key;
       const events = data.events.slice().reverse();
-      if (!events.length) { list.replaceChildren(el("li", { className: "empty" }, el("div", { className: "empty-title", textContent: "No events" }))); return; }
+      if (!events.length) { list.replaceChildren(emptyState("li", ICON.clock, "No events")); return; }
       list.replaceChildren(...events.map((ev) => {
-        const [title, tone] = eventInfo(ev);
+        const [title, tone, ic] = eventInfo(ev);
         const t = ev.timestamp ? Date.parse(ev.timestamp) : null;
         const item = el("li", { className: `tli ${tone}` },
-          el("span", { className: "node" }),
+          el("span", { className: "node" }, icon(ic)),
           el("div", { className: "tli-head" },
             el("span", { className: "tli-title", textContent: title }),
             el("span", { className: "time", textContent: t ? new Date(t).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "" })));
@@ -1318,13 +1398,16 @@
     e.preventDefault();
     const defaults = state?.config.thresholds ?? {};
     const next = {};
+    // Mark every value that is wrong on its own field, and go to the first.
+    const bad = ALERTS.filter(([id]) => !$(id).value.trim() || !(Number($(id).value) > 0)).map(([id]) => id);
+    for (const [id] of ALERTS) setInvalid(id, bad.includes(id));
+    if (bad.length) {
+      $("alerts-error").textContent = "Each value must be a number above 0.";
+      $(bad[0]).focus();
+      return;
+    }
     for (const [id, param, field] of ALERTS) {
       const v = Number($(id).value);
-      if (!$(id).value.trim() || !(v > 0)) {
-        $("alerts-error").textContent = "Each value must be a number above 0.";
-        $(id).focus();
-        return;
-      }
       if (v !== defaults[field]) next[param] = v;
     }
     if (Object.keys(next).length) store.set("alerts", JSON.stringify(next)); else store.del("alerts");
@@ -1333,8 +1416,26 @@
     const btn = $("alerts-form").querySelector('button[type="submit"]');
     btn.textContent = "Saved";
     setTimeout(() => { btn.textContent = "Save"; }, 1200);
+    toast("Alert settings saved", { tone: "success", description: "What needs attention now uses these limits in this browser." });
   });
-  $("alerts-reset").addEventListener("click", async () => { store.del("alerts"); await refreshState(); fillAlerts(); });
+  function setInvalid(id, invalid) {
+    const input = $(id), field = input.closest(".field");
+    if (invalid) { input.setAttribute("aria-invalid", "true"); input.setAttribute("aria-errormessage", "alerts-error"); field.dataset.invalid = ""; }
+    else { input.removeAttribute("aria-invalid"); input.removeAttribute("aria-errormessage"); delete field.dataset.invalid; }
+  }
+  for (const [id] of ALERTS) {
+    $(id).addEventListener("input", () => {
+      setInvalid(id, false);
+      if (!$("alerts-form").querySelector("[aria-invalid]")) $("alerts-error").textContent = "";
+    });
+  }
+  $("alerts-reset").addEventListener("click", async () => {
+    store.del("alerts");
+    for (const [id] of ALERTS) setInvalid(id, false);
+    await refreshState();
+    fillAlerts();
+    toast("Alert settings reset", { description: "Colab Monitor's defaults apply again." });
+  });
 
   const canNotify = () => "Notification" in window;
   function renderNotify() {
@@ -1351,21 +1452,201 @@
     renderNotify();
   });
   // Tell about what is new since the last refresh: never about what was already there on load.
+  // The page shows a toast for each new thing; the browser notifies too when that is turned on.
+  const ATTENTION_TOAST = {
+    orphan: ["Orphaned machine", "error"],
+    runway: ["Compute units running low", "error"],
+    idle: ["Idle machine", "warning"],
+    stalled: ["Job went silent", "warning"],
+    failed: ["Run failed", "error"],
+  };
+  const goToLog = (path, error) => () => {
+    openLog(path); jumpToError = error;
+    if (route === "logs") showLog(path); else location.hash = "#/logs";
+  };
+  function attentionToast(a) {
+    if (a.kind === "failed" && a.path) return null;  // the job's own toast says it
+    const [title, tone] = ATTENTION_TOAST[a.kind] ?? ["Needs attention", "warning"];
+    const machine = a.endpoint && state.sessions.find((s) => s.endpoint === a.endpoint);
+    const action = machine ? { label: "Details", run: () => { location.hash = sessionHref(machine.endpoint); } }
+      : route !== "overview" ? { label: "View", run: () => { location.hash = "#/overview"; } } : undefined;
+    return [title, { tone, description: a.message, action, duration: 8000 }];
+  }
   let seen = null;
   function notifyChanges() {
     const now = new Map();
-    for (const a of state.insights.attention) now.set(`a|${a.kind}|${a.subject}`, [a.severity === "critical" ? "Needs attention" : "Colab Monitor", a.message]);
+    for (const a of state.insights.attention) {
+      now.set(`a|${a.kind}|${a.subject}`, [a.severity === "critical" ? "Needs attention" : "Colab Monitor", a.message, () => attentionToast(a)]);
+    }
     for (const j of state.insights.jobs) {
-      if (j.state === "failed") now.set(`j|${j.path}|failed`, [`${j.name} failed`, j.last_error ?? ""]);
-      if (j.state === "finished") now.set(`j|${j.path}|finished`, [`${j.name} finished`, j.session ? `on ${j.session}` : ""]);
+      if (j.state === "failed") {
+        now.set(`j|${j.path}|failed`, [`${j.name} failed`, j.last_error ?? "",
+          () => [`${j.name} failed`, { tone: "error", description: j.last_error ?? undefined, code: true, action: { label: "Show error", run: goToLog(j.path, true) }, duration: 10000 }]]);
+      }
+      if (j.state === "finished") {
+        now.set(`j|${j.path}|finished`, [`${j.name} finished`, j.session ? `on ${j.session}` : "",
+          () => [`${j.name} finished`, { tone: "success", description: j.session ? `on ${j.session}` : undefined, action: { label: "Open log", run: goToLog(j.path, false) }, duration: 8000 }]]);
+      }
     }
     const before = seen;
     seen = new Set(now.keys());
-    if (!before || store.get("notify") !== "1" || !canNotify() || Notification.permission !== "granted") return;
-    for (const [k, [title, body]] of now) {
-      if (!before.has(k)) { try { new Notification(title, { body, tag: k, icon: "/icon.svg" }); } catch {} }
-    }
+    if (!before) return;
+    const fresh = [...now].filter(([k]) => !before.has(k));
+    for (const [, [, , make]] of fresh.slice(0, 3)) { const t = make(); if (t) toast(...t); }
+    if (store.get("notify") !== "1" || !canNotify() || Notification.permission !== "granted") return;
+    for (const [k, [title, body]] of fresh) { try { new Notification(title, { body, tag: k, icon: "/icon.svg" }); } catch {} }
   }
+
+  /* ---------- Command menu ---------- */
+  // ⌘K or Ctrl K: jump to a page, a machine's details, a log, a session's history, or a theme.
+  const PAGES = [
+    ["overview", "Overview", "balance usage runway spending jobs attention"],
+    ["sessions", "Sessions", "machines status rate cost"],
+    ["logs", "Logs", "output errors metrics loss"],
+    ["history", "History", "events code output"],
+    ["settings", "Settings", "alerts notifications theme connection data sources"],
+  ];
+  const navIcon = (r) => document.querySelector(`nav a[data-route="${r}"] svg`)?.outerHTML ?? ICON.dot;
+  let cmdItems = [], cmdShown = [], cmdActive = 0, cmdOpener = null;
+  function commandItems() {
+    const items = PAGES.map(([r, label, words]) => ({ group: "Pages", label, words, ic: navIcon(r), run: () => { location.hash = `#/${r}`; } }));
+    if (state) {
+      for (const s of state.sessions) {
+        items.push({ group: "Machines", label: s.name ?? "Unknown machine", sub: [hardware(s), s.running].filter(Boolean).join(" · ") || s.endpoint,
+          words: [s.endpoint, (STATUS[s.status] ?? [s.status])[0]].join(" "), ic: ICON.chip, badge: statusPill(s.status),
+          run: () => { location.hash = sessionHref(s.endpoint); } });
+      }
+      for (const l of state.logs) {
+        items.push({ group: "Logs", label: l.name, sub: shortDir(l.path.slice(0, l.path.lastIndexOf("/") + 1)), words: l.path, ic: ICON.terminal,
+          run: () => { openLog(l.path); if (route === "logs") showLog(l.path); else location.hash = "#/logs"; } });
+      }
+      for (const name of state.history) {
+        items.push({ group: "History", label: name, sub: "Code, output and errors", words: "", ic: ICON.clock,
+          run: () => { if (route === "history") showHistory(name); else { selectedHistory = name; store.set("history", name); location.hash = "#/history"; } } });
+      }
+    }
+    for (const [t, label, ic] of [["light", "Light theme", ICON.sun], ["dark", "Dark theme", ICON.moon], ["system", "System theme", ICON.monitor]]) {
+      items.push({ group: "Theme", label, words: "appearance mode color", ic, run: () => applyTheme(t) });
+    }
+    return items;
+  }
+  function renderCommands() {
+    const words = $("cmdk-input").value.toLowerCase().split(/\s+/).filter(Boolean);
+    cmdShown = cmdItems.filter((it) => {
+      const hay = `${it.label} ${it.sub ?? ""} ${it.words} ${it.group}`.toLowerCase();
+      return words.every((w) => hay.includes(w));
+    });
+    cmdActive = Math.min(cmdActive, Math.max(0, cmdShown.length - 1));
+    const groups = [];
+    cmdShown.forEach((it, i) => {
+      let g = groups.at(-1);
+      if (g?.name !== it.group) groups.push(g = { name: it.group, rows: [] });
+      g.rows.push(el("div", { className: "cmdk-item", id: `cmdk-opt-${i}`, dataset: { i },
+        attrs: { role: "option", "aria-selected": String(i === cmdActive) } },
+        icon(it.ic), el("span", { className: "cmdk-label", textContent: it.label }),
+        el("span", { className: "cmdk-sub", textContent: it.sub ?? "" }), it.badge ?? null));
+    });
+    $("cmdk-list").replaceChildren(...groups.map((g, n) => el("div", { className: "cmdk-group", attrs: { role: "group", "aria-labelledby": `cmdk-g-${n}` } },
+      el("div", { className: "cmdk-heading", id: `cmdk-g-${n}`, textContent: g.name, attrs: { "aria-hidden": "true" } }), ...g.rows)));
+    $("cmdk-empty").hidden = cmdShown.length > 0;
+    setActive(cmdActive);
+  }
+  function setActive(i) {
+    cmdActive = i;
+    for (const n of $("cmdk-list").querySelectorAll("[role=option]")) n.setAttribute("aria-selected", String(Number(n.dataset.i) === i));
+    const row = $(`cmdk-opt-${i}`);
+    if (row) { $("cmdk-input").setAttribute("aria-activedescendant", row.id); row.scrollIntoView({ block: "nearest" }); }
+    else $("cmdk-input").removeAttribute("aria-activedescendant");
+  }
+  function openCommands() {
+    if (!$("cmdk").hidden) return;
+    hideTip();
+    cmdOpener = document.activeElement;
+    cmdItems = commandItems();
+    cmdActive = 0;
+    $("cmdk-input").value = "";
+    $("cmdk").hidden = false;
+    $("cmdk-scrim").hidden = false;
+    renderCommands();
+    $("cmdk-input").focus();
+  }
+  function closeCommands(restore = true) {
+    if ($("cmdk").hidden) return;
+    $("cmdk").hidden = true;
+    $("cmdk-scrim").hidden = true;
+    if (restore && cmdOpener?.isConnected) cmdOpener.focus();
+    cmdOpener = null;
+  }
+  function runCommand(i) {
+    const it = cmdShown[i];
+    if (!it) return;
+    closeCommands();
+    it.run();
+  }
+  $("cmdk-open").addEventListener("click", openCommands);
+  $("cmdk-scrim").addEventListener("click", () => closeCommands());
+  $("cmdk-input").addEventListener("input", () => { cmdActive = 0; renderCommands(); });
+  $("cmdk-list").addEventListener("pointermove", (e) => {
+    const row = e.target.closest("[role=option]");
+    if (row && Number(row.dataset.i) !== cmdActive) setActive(Number(row.dataset.i));
+  });
+  $("cmdk-list").addEventListener("click", (e) => {
+    const row = e.target.closest("[role=option]");
+    if (row) runCommand(Number(row.dataset.i));
+  });
+  // Captured on window, so the menu answers Escape and Tab before the details sheet does.
+  window.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "k") {
+      e.preventDefault();
+      e.stopPropagation();
+      if ($("cmdk").hidden) openCommands(); else closeCommands();
+      return;
+    }
+    if ($("cmdk").hidden) return;
+    const n = cmdShown.length;
+    if (e.key === "Escape") closeCommands();
+    else if (e.key === "ArrowDown" && n) setActive((cmdActive + 1) % n);
+    else if (e.key === "ArrowUp" && n) setActive((cmdActive - 1 + n) % n);
+    else if (e.key === "Home" && n && e.ctrlKey) setActive(0);
+    else if (e.key === "End" && n && e.ctrlKey) setActive(n - 1);
+    else if (e.key === "Enter") runCommand(cmdActive);
+    else if (e.key !== "Tab") return;  // typing goes to the input
+    e.preventDefault();
+    e.stopPropagation();
+  }, true);
+
+  /* ---------- Tooltips ---------- */
+  // Buttons with only an icon name themselves in a tooltip on hover and on keyboard focus.
+  let tipFor = null;
+  function showTip(target) {
+    const tip = $("tip");
+    tipFor = target;
+    const key = target.dataset.shortcut;
+    tip.replaceChildren(target.dataset.tooltip, key ? el("kbd", { className: "kbd", textContent: key.length === 1 ? shortcut(key) : key }) : "");
+    tip.hidden = false;
+    const r = target.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+    const side = r.top - h - 8 < 4 ? "bottom" : "top";
+    const left = Math.min(Math.max(r.left + r.width / 2 - w / 2, 4), window.innerWidth - w - 4);
+    tip.dataset.side = side;
+    tip.style.left = `${left}px`;
+    tip.style.top = `${side === "top" ? r.top - h - 8 : r.bottom + 8}px`;
+    tip.style.setProperty("--arrow-x", `${Math.min(Math.max(r.left + r.width / 2 - left, 10), w - 10)}px`);
+  }
+  function hideTip() { tipFor = null; $("tip").hidden = true; }
+  document.addEventListener("pointerover", (e) => {
+    const t = e.target.closest?.("[data-tooltip]");
+    if (t && t !== tipFor && e.pointerType !== "touch") showTip(t);
+    else if (!t && tipFor) hideTip();
+  });
+  document.addEventListener("pointerleave", hideTip);
+  document.addEventListener("focusin", (e) => {
+    const t = e.target.closest?.("[data-tooltip]");
+    if (t && t.matches(":focus-visible")) showTip(t); else if (tipFor) hideTip();
+  });
+  document.addEventListener("focusout", () => { if (tipFor && !tipFor.matches(":hover")) hideTip(); });
+  document.addEventListener("pointerdown", hideTip);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && tipFor) hideTip(); });
+  window.addEventListener("scroll", hideTip, true);
 
   /* ---------- Loop ---------- */
   async function refreshState() {
@@ -1380,10 +1661,9 @@
       if (route === "settings") renderSettings();
       if (selectedSession) renderDrawer();
     } catch {
-      for (const id of ["conn-dot", "mobile-dot", "checked-dot"]) $(id).className = "dot bad";
+      $("conn-dot").className = "dot bad";
       $("conn-title").textContent = "Dashboard offline";
       $("conn-sub").textContent = "Is colab-monitor still running?";
-      $("checked-text").textContent = "Dashboard server offline";
     }
   }
 
