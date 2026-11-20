@@ -84,6 +84,25 @@ caught it.
   icons and the README's light and dark marks.
 - Update `CHANGELOG.md` under *Unreleased* for any user-visible change.
 
+## Releases
+
+1. Open a pull request titled `chore: release X.Y.Z`. Set the version in
+   `src/colab_monitor/__init__.py` and `.claude-plugin/plugin.json`, change every install command
+   to `@vX.Y.Z`, and move the *Unreleased* changelog entries into a section dated today. Tests
+   check that the versions and the install commands match.
+2. When it merges, tag the merge commit `vX.Y.Z` at once, because the install commands now name
+   that tag. Publish a GitHub release whose notes are that changelog section.
+3. The Release workflow builds the package, runs `scripts/smoke_test.sh` on the wheel, and
+   attaches the wheel and sdist to the release.
+
+The workflow also publishes to PyPI once a maintainer turns it on:
+
+1. On PyPI, add a trusted publisher for the project `colab-monitor`: owner `hohieuai`, repository
+   `colab-monitor`, workflow `release.yml`, environment `pypi`.
+2. In the repository's settings, set the Actions variable `PUBLISH_TO_PYPI` to `true`.
+3. Run the Release workflow by hand for the latest tag, then change the install commands to
+   `uv tool install colab-monitor`.
+
 ## Pull requests
 
 Pull requests are squash-merged, so the title becomes the commit message on `main`. Write the title

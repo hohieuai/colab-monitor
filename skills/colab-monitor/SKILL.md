@@ -10,9 +10,9 @@ Set up a local dashboard for the user's Colab sessions in one step. The user wat
 
 ## Installation
 
-If `command -v colab-monitor` finds nothing, install it with
-`uv tool install git+https://github.com/hohieuai/colab-monitor`. The setup block below does this for
-you, and it reinstalls the latest version when the installed copy is too old for this skill (one
+If `command -v colab-monitor` finds nothing, install the release this skill is written for with
+`uv tool install git+https://github.com/hohieuai/colab-monitor@v0.0.2`. The setup block below does
+this for you, and it reinstalls that release when the installed copy is too old for this skill (one
 without the `status` command). Running Colab jobs also needs the `colab` CLI itself
 (`uv tool install google-colab-cli`).
 
@@ -91,10 +91,10 @@ Follow these shared conventions, or the dashboard shows the wrong picture:
 Run this block as written. It is safe to run again: it reuses a dashboard that is already running.
 
 ```bash
-command -v colab-monitor >/dev/null || uv tool install git+https://github.com/hohieuai/colab-monitor
+command -v colab-monitor >/dev/null || uv tool install git+https://github.com/hohieuai/colab-monitor@v0.0.2
 # An older install has no status command; reinstall the latest if so.
 colab-monitor status -h >/dev/null 2>&1 \
-  || uv tool install --reinstall git+https://github.com/hohieuai/colab-monitor
+  || uv tool install --reinstall git+https://github.com/hohieuai/colab-monitor@v0.0.2
 mkdir -p ~/colab-runs
 API=http://127.0.0.1:26522 URL=http://localhost:26522 OUT="${TMPDIR:-/tmp}/colab-monitor.log"
 AUTH=oauth2  # same sign-in as the colab CLI: ADC only when no OAuth token is saved
@@ -236,7 +236,7 @@ kill $(lsof -t -iTCP:26522 -sTCP:LISTEN)
 | `Port 26522 is used by another program` | Add `--port 26523` to the start command, use port 26523 in every URL, and pass `--port 26523` to `colab-monitor status`. |
 | `curl` can't connect | The dashboard isn't running. Run the setup block. |
 | `Not signed in to Colab; showing local files only` from `status` | No dashboard runs and the CLI isn't signed in. Ask the user to run `colab sessions`, or run the setup block, which starts the dashboard. |
-| `colab-monitor: error: unrecognized arguments` | The installed copy is older than this skill. Run `uv tool install --reinstall git+https://github.com/hohieuai/colab-monitor`, then the setup block. |
+| `colab-monitor: error: unrecognized arguments` | The installed copy is older than this skill. Run `uv tool install --reinstall git+https://github.com/hohieuai/colab-monitor@v0.0.2`, then the setup block. |
 | Your own machines show as `orphan` | You started them with `colab --config FILE`. Stop the dashboard and start it again with `--config ~/.config/colab-cli/sessions.json --config FILE`. |
 | A job is missing from the **Logs** page | Its output isn't in a `.log`, `.out`, or `.err` file directly inside `~/colab-runs`. Redirect it there. |
 | A machine is `orphan` and the user approves releasing it | `uvx --from google-colab-cli python -c "from colab_cli.common import state; state.client.unassign('ENDPOINT')"`, using the machine's `endpoint`. With `AUTH=adc`, run `uvx --from google-colab-cli python -c "from colab_cli.auth import AuthProvider; from colab_cli.common import state; state.auth_provider = AuthProvider.ADC; state.client.unassign('ENDPOINT')"` instead, or the command waits for an OAuth code. Then confirm with `colab sessions`. |
