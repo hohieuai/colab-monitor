@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.0.2] - 2026-11-21
+
+A new look built on shadcn/ui's components, a command menu, a new logo, and support for `colab`
+CLI 0.8.0.
+
 ### Added
 
 - **Command menu:** press ⌘K (Ctrl K on Windows and Linux) or click **Search** to jump to a page,
@@ -153,5 +158,6 @@ Changed and Fixed lists describe what differs from those builds.
 - The **Logs** page no longer lists a symlink that leads out of the log folder, which it could not
   open.
 
-[Unreleased]: https://github.com/hohieuai/colab-monitor/compare/v0.0.1...HEAD
+[Unreleased]: https://github.com/hohieuai/colab-monitor/compare/v0.0.2...HEAD
+[0.0.2]: https://github.com/hohieuai/colab-monitor/compare/v0.0.1...v0.0.2
 [0.0.1]: https://github.com/hohieuai/colab-monitor/releases/tag/v0.0.1
