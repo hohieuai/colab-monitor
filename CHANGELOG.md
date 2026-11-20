@@ -23,8 +23,9 @@ All notable changes to this project are documented here. The format follows
 - A new look: pure black and white with neutral greys and hairline rules, a true black dark mode,
   and colour only as a small dot, icon or error text. Inter and JetBrains Mono replace Geist and
   Geist Mono; numbers, times and file names are monospaced. The components follow shadcn/ui.
-- A new logo: a notebook cell's brackets around a pulse, in black and white, for the app icon,
-  the browser tab and the home-screen icon.
+- A new logo: a radar drawn as a pattern of dots, the trace fading behind the sweep, in black and
+  white, for the app icon, the browser tab, the home-screen icon and the top of the README.
+  `scripts/make_logo.py` writes them all.
 - The top bar shows the Colab connection on every page; Settings and the theme switch sit at the
   foot of the sidebar.
 - The usage chart is drawn in ink, and the log viewer follows the light or dark theme.

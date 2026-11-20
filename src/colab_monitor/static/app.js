@@ -270,7 +270,7 @@
   }
 
   let favicon = null;
-  fetch("/favicon.svg?v=5").then((r) => r.text()).then((t) => { favicon = t; updateTitle(); }).catch(() => {});
+  fetch("/favicon.svg?v=6").then((r) => r.text()).then((t) => { favicon = t; updateTitle(); }).catch(() => {});
   let iconKey = "";
   function updateTitle() {
     const items = state?.insights?.attention ?? [];
