@@ -554,7 +554,7 @@ def test_no_sideways_overflow(page_factory, site, scheme, width):
 
 
 def test_monospace_text_has_no_ligatures(page, site):
-    # Geist Mono turns "==" and "###" into ligatures, which misprints code and progress bars.
+    # A mono font's ligatures turn "==" and "###" into one glyph, which misprints code and progress bars.
     def features(selector):
         return page.evaluate(f"getComputedStyle(document.querySelector('{selector}')).fontFeatureSettings")
 

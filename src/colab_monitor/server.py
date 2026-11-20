@@ -248,8 +248,12 @@ STATIC_FILES = {
     "/icon.svg": ("icon.svg", "image/svg+xml"),
     "/favicon.svg": ("favicon.svg", "image/svg+xml"),
     "/apple-touch-icon.png": ("apple-touch-icon.png", "image/png"),
-    "/fonts/Geist-Variable.woff2": ("fonts/Geist-Variable.woff2", "font/woff2"),
-    "/fonts/GeistMono-Variable.woff2": ("fonts/GeistMono-Variable.woff2", "font/woff2"),
+    "/fonts/Inter-Latin.woff2": ("fonts/Inter-Latin.woff2", "font/woff2"),
+    "/fonts/Inter-LatinExt.woff2": ("fonts/Inter-LatinExt.woff2", "font/woff2"),
+    "/fonts/Inter-Vietnamese.woff2": ("fonts/Inter-Vietnamese.woff2", "font/woff2"),
+    "/fonts/JetBrainsMono-Latin.woff2": ("fonts/JetBrainsMono-Latin.woff2", "font/woff2"),
+    "/fonts/JetBrainsMono-LatinExt.woff2": ("fonts/JetBrainsMono-LatinExt.woff2", "font/woff2"),
+    "/fonts/JetBrainsMono-Vietnamese.woff2": ("fonts/JetBrainsMono-Vietnamese.woff2", "font/woff2"),
 }
 # The page loads nothing from other origins and runs no inline scripts.
 CONTENT_SECURITY_POLICY = "; ".join(

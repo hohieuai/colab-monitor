@@ -6,6 +6,30 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Command menu:** press ⌘K (Ctrl K on Windows and Linux) or click **Search** to jump to a page,
+  a machine's details, a log, a session's history, or a theme.
+- **Toasts:** copying a command shows what was copied, saving or resetting alert settings confirms
+  it, and a job that fails or finishes, or a new problem, shows a toast with a button that opens it
+  while the page is open. A clipboard that the browser blocks now says so.
+- **Collapsible sidebar:** the button at the top left or ⌘B (Ctrl B) hides the sidebar, and the
+  dashboard remembers the choice.
+- Loading placeholders until the dashboard's first answer, styled tooltips on icon buttons, and
+  an alert setting that is not a number above 0 is marked on its own field.
+
+### Changed
+
+- A new look: pure black and white with neutral greys and hairline rules, a true black dark mode,
+  and colour only as a small dot, icon or error text. Inter and JetBrains Mono replace Geist and
+  Geist Mono; numbers, times and file names are monospaced. The components follow shadcn/ui.
+- A new logo: a notebook cell's brackets around a pulse, in black and white, for the app icon,
+  the browser tab and the home-screen icon.
+- The top bar shows the Colab connection on every page; Settings and the theme switch sit at the
+  foot of the sidebar.
+- The usage chart is drawn in ink, and the log viewer follows the light or dark theme.
+- Text that was too faint to read easily now meets WCAG AA contrast.
+
 ## [0.0.1] - 2026-11-13
 
 First release. Builds installed from `main` before this release reported version 0.1.0. The

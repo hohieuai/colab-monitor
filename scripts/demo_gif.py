@@ -295,6 +295,13 @@ def main() -> None:
             page.wait_for_timeout(500)
             capture(page, 2600)
 
+            # Any page, machine, log or session is a few keys away.
+            page.keyboard.press("Control+k")
+            page.keyboard.type("llama")
+            page.wait_for_timeout(400)
+            capture(page, 2600)
+            page.keyboard.press("Escape")
+
             # The same overview in dark mode, one click away in the sidebar.
             page.click('.theme-seg [data-theme-choice="dark"]')
             page.click('nav a[data-route="overview"]')

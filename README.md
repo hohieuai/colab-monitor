@@ -10,7 +10,7 @@ Monitor your Colab sessions, compute units, and job logs from a local dashboard 
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)
 
-<img src="docs/images/demo.gif" width="900" alt="Colab Monitor tour: the Overview page with a usage chart that marks when each machine started, job progress and spending, the Sessions page with three running machines, one machine's details with its cost and loss curve, a training log streaming new lines under its loss chart, a session's history, and the overview in dark mode">
+<img src="docs/images/demo.gif" width="900" alt="Colab Monitor tour: the Overview page with a usage chart that marks when each machine started, job progress and spending, the Sessions page with three running machines, one machine's details with its cost and loss curve, a training log streaming new lines under its loss chart, a session's history, the command menu finding a machine, its log and its history, and the overview in dark mode">
 
 </div>
 
@@ -35,6 +35,9 @@ The page has five sections:
 - **Settings** switches between light and dark mode, sets when something needs attention, turns on
   browser notifications for new problems and finished or failed jobs, and shows where the data comes
   from.
+
+Press ⌘K (Ctrl K on Windows and Linux) to jump to any page, machine, log, or session, and ⌘B
+(Ctrl B) to hide the sidebar. On **Sessions** and **Logs**, `/` jumps to the search field.
 
 Idle and orphaned machines still use compute units, so the dashboard marks them in amber and red.
 An orphaned machine runs on your account, but the CLI no longer tracks it, so nothing will stop it
@@ -164,7 +167,7 @@ On Claude Code versions before 2.1.275, add the marketplace first, then install 
 ## License
 
 Copyright 2026 The Colab Monitor Authors, listed in [AUTHORS](AUTHORS). Colab Monitor is licensed
-under the [Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for attributions. The bundled Geist
-fonts use the [SIL Open Font License](src/colab_monitor/static/fonts/OFL.txt).
+under the [Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for attributions. The bundled Inter
+and JetBrains Mono fonts use the [SIL Open Font License](src/colab_monitor/static/fonts/OFL.txt).
 
 Colab Monitor is an unofficial community project and is not affiliated with Colab.

@@ -197,8 +197,12 @@ def test_serves_icons_and_nothing_else_from_static(dashboard):
             ("/app.css", "text/css; charset=utf-8"),
             ("/app.js", "text/javascript; charset=utf-8"),
             ("/theme.js", "text/javascript; charset=utf-8"),
-            ("/fonts/Geist-Variable.woff2", "font/woff2"),
-            ("/fonts/GeistMono-Variable.woff2", "font/woff2"),
+            ("/fonts/Inter-Latin.woff2", "font/woff2"),
+            ("/fonts/Inter-LatinExt.woff2", "font/woff2"),
+            ("/fonts/Inter-Vietnamese.woff2", "font/woff2"),
+            ("/fonts/JetBrainsMono-Latin.woff2", "font/woff2"),
+            ("/fonts/JetBrainsMono-LatinExt.woff2", "font/woff2"),
+            ("/fonts/JetBrainsMono-Vietnamese.woff2", "font/woff2"),
         ]:
             with urllib.request.urlopen(base + path) as resp:
                 assert resp.status == 200
@@ -253,7 +257,7 @@ def test_security_headers(dashboard):
             html = resp.read().decode()
             assert "<script>" not in html  # no inline scripts, so the policy can forbid them
             assert "googleapis" not in html
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}/fonts/Geist-Variable.woff2") as resp:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/fonts/Inter-Latin.woff2") as resp:
             assert "max-age" in resp.headers["Cache-Control"]
     finally:
         server.shutdown()

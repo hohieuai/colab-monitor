@@ -1,4 +1,8 @@
-Copyright (c) 2023 Vercel, in collaboration with basement.studio
+Inter: Copyright (c) 2016 The Inter Project Authors (https://github.com/rsms/inter)
+JetBrains Mono: Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)
+
+The files in this folder are the Latin, Latin Extended and Vietnamese subsets of the variable
+fonts as published by Fontsource (@fontsource-variable/inter and @fontsource-variable/jetbrains-mono 5.2.5).
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:
