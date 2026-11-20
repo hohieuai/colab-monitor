@@ -639,6 +639,47 @@ class TestSignIn:
         cli._quiet_session("oauth2")
         assert seen["info"]["token"] == "from-file"
 
+    @pytest.fixture
+    def locked_keyring(self, monkeypatch):
+        """A keyring that waits for an unlock prompt that a terminal, SSH session or agent never shows."""
+        release = threading.Event()
+
+        def wait_for_unlock(service, user):
+            release.wait(10)
+            return None
+
+        monkeypatch.setitem(
+            sys.modules, "keyring", type("Keyring", (), {"get_password": staticmethod(wait_for_unlock)})()
+        )
+        monkeypatch.setattr(cli, "KEYRING_TIMEOUT", 0.1)
+        yield
+        release.set()
+
+    @pytest.mark.usefixtures("locked_keyring")
+    def test_a_locked_keyring_does_not_hang(self, capsys):
+        started = time.monotonic()
+        assert cli._connect(self._args(), usage_log=None) is None
+        assert time.monotonic() - started < 2
+        err = capsys.readouterr().err
+        assert "keyring" in err and "--auth adc" in err
+        assert "Not signed in" not in err
+
+    @pytest.mark.usefixtures("locked_keyring")
+    def test_a_locked_keyring_falls_back_to_the_token_file(self, tmp_path, monkeypatch):
+        from google.oauth2 import credentials
+
+        self._token(tmp_path, text='{"token": "from-file"}')
+        seen = {}
+
+        def from_info(info, scopes):
+            seen["info"] = info
+            return type("C", (), {"valid": True})()
+
+        monkeypatch.setattr(credentials.Credentials, "from_authorized_user_info", from_info)
+        monkeypatch.setattr("google.auth.transport.requests.AuthorizedSession", lambda c: c)
+        cli._quiet_session("oauth2")
+        assert seen["info"]["token"] == "from-file"
+
     def test_empty_keyring_and_no_token_file_means_not_signed_in(self, monkeypatch):
         monkeypatch.setitem(
             sys.modules, "keyring", type("Keyring", (), {"get_password": staticmethod(lambda s, u: None)})()

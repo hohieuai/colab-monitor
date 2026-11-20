@@ -78,6 +78,9 @@ Follow these shared conventions, or the dashboard shows the wrong picture:
   can't sign in for the user: it opens a browser and waits for a pasted code. Ask the user to run
   `colab sessions` in their terminal (in Claude Code they can type `! colab sessions`), then run the
   setup block again.
+- If `status` says `The OS keyring didn't answer`, the keyring is locked and waits for a password
+  prompt that you can't see. This is common on Linux over SSH. Ask the user to unlock it, or use
+  `--auth adc` if they sign in with Application Default Credentials.
 - If the user can't sign in now, start with `--no-api`. The **Logs** and **History** pages still
   work, but there are no compute units or machine statuses.
 
@@ -96,13 +99,20 @@ mkdir -p ~/colab-runs
 API=http://127.0.0.1:26522 URL=http://localhost:26522 OUT="${TMPDIR:-/tmp}/colab-monitor.log"
 AUTH=oauth2  # same sign-in as the colab CLI: ADC only when no OAuth token is saved
 if ! python3 -c '
-import os, sys
-try:
-    import keyring
-    if keyring.get_password("google-colab-cli", "oauth_token"):
-        raise SystemExit(0)
-except Exception:
-    pass
+import os, threading
+found = []
+def read():
+    try:
+        import keyring
+        found.append(keyring.get_password("google-colab-cli", "oauth_token"))
+    except Exception:
+        pass
+# A locked keyring waits for an unlock prompt that never shows here: give up after 5 seconds.
+reader = threading.Thread(target=read, daemon=True)
+reader.start()
+reader.join(5)
+if found and found[0]:
+    raise SystemExit(0)
 raise SystemExit(0 if os.path.exists(os.path.expanduser("~/.config/colab-cli/token.json")) else 1)
 ' \
   && { [ -n "${GOOGLE_APPLICATION_CREDENTIALS:-}" ] \
@@ -147,7 +157,7 @@ fi
   With the default of 30 seconds, the CLI's local client keeps a CPU core busy for the rest of a
   longer job.
 - Prefer `colab run` / `colab exec` over `colab ssh` when you want the dashboard to show the job as
-  running: SSH does not mark the machine busy.
+  running: SSH, including `colab ssh -- CMD`, does not mark the machine busy.
 - `--timeout` on `colab run` and `colab exec` is an idle limit: seconds to wait with no output
   before failing (`0` means no limit). Jobs that print regularly can keep the default of 30. For
   long silent phases, pass a larger value such as `86400`, or `--timeout 0`.
@@ -179,8 +189,8 @@ for a in r["attention"]:
 
 | `status` | Meaning | What to do |
 |---|---|---|
-| `busy` | The CLI is running `colab run`, `exec`, `repl`, or `console` in the machine. | Wait, or read its log. |
-| `idle` | The machine runs and bills, but no such command runs (including during `colab ssh`). | If its work is done, stop it with `colab stop -s NAME`. |
+| `busy` | The CLI is running `colab run`, `exec`, or `repl` (or `console` before CLI 0.8.0) in the machine. | Wait, or read its log. |
+| `idle` | The machine runs and bills, but no such command runs (including during `colab ssh` and `colab ssh -- CMD`). | If its work is done, stop it with `colab stop -s NAME`. |
 | `stopping` | The CLI stopped it in the last 10 minutes, and the last Colab check still listed it. | Nothing. It usually disappears after the next check; if it is still listed after 10 minutes, it shows as `orphan`. |
 | `orphan` | The machine bills, but the CLI has no record of it. | Tell the user. Release it only with their approval (see **Recovery**). |
 | `unknown` | Colab hasn't been checked yet. | Wait one interval and check again. |
