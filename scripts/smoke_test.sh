@@ -20,7 +20,9 @@ base="http://127.0.0.1:$port"
 for _ in $(seq 1 50); do curl -sf "$base/" >/dev/null && break; sleep 0.2; done
 
 for path in / /app.css /app.js /theme.js /favicon.svg /icon.svg /apple-touch-icon.png \
-            /fonts/Geist-Variable.woff2 /fonts/GeistMono-Variable.woff2 /api/state; do
+            /fonts/Inter-Latin.woff2 /fonts/Inter-LatinExt.woff2 /fonts/Inter-Vietnamese.woff2 \
+            /fonts/JetBrainsMono-Latin.woff2 /fonts/JetBrainsMono-LatinExt.woff2 \
+            /fonts/JetBrainsMono-Vietnamese.woff2 /api/state; do
   code=$(curl -s -o /dev/null -w '%{http_code}' "$base$path")
   if [[ "$code" != 200 ]]; then
     echo "FAIL $path -> $code" >&2

@@ -542,3 +542,14 @@ def test_state_reports_the_default_thresholds_even_when_overridden(dashboard):
     _, body = app.handle("/api/state", {"idle_alert": "5"})
     assert body["config"]["thresholds"] == {"idle_minutes": 30, "stall_minutes": 15, "runway_hours": 12}
     assert body["insights"]["thresholds"]["idle_minutes"] == 5
+
+
+def test_the_release_smoke_test_checks_every_served_file():
+    """scripts/smoke_test.sh checks that a built wheel serves the page's files; it must list them all."""
+    import pathlib
+    import re
+
+    script = (pathlib.Path(__file__).parent.parent / "scripts" / "smoke_test.sh").read_text()
+    listed = set(re.search(r"for path in (.*?); do", script, re.S).group(1).replace("\\", " ").split())
+    served = set(server.STATIC_FILES) - {"/index.html"}  # the same file as /
+    assert listed - {"/api/state"} == served
