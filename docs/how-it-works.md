@@ -27,8 +27,9 @@ local files on every page refresh and asks Colab on a fixed interval.
 A machine's status comes from comparing Colab's list of machines with the CLI's state file.
 
 - **Running** means that Colab lists the machine and the CLI is running a command in it, such as
-  `colab run`, `colab exec`, `colab repl`, or `colab console`. `colab ssh` does not count: the
-  machine stays **Idle** on the dashboard while you are connected over SSH.
+  `colab run`, `colab exec`, or `colab repl` (or `colab console`, which `colab` CLI 0.8.0
+  removed). `colab ssh` does not count: the machine stays **Idle** on the dashboard while you are
+  connected over SSH, and while a command started with `colab ssh -- CMD` runs.
 - **Idle** means that Colab lists the machine and the CLI knows it, but no such command runs in it.
   An idle machine still uses compute units.
 - **Stopping** means that the CLI stopped the machine in the last 10 minutes, but the last Colab

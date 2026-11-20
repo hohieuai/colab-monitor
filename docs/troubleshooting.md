@@ -71,12 +71,25 @@ they show local files only, with no balance or machines.
 
 To read local files on purpose and hide the message, pass `--no-api`.
 
+## Fix "The OS keyring didn't answer" from status or watch
+
+Since version 0.8.0, the `colab` CLI keeps its sign-in only in the OS keyring. A locked keyring,
+common on Linux, waits for a password prompt that an SSH session, a script, or an agent never
+shows. `status` and `watch` stop waiting after 5 seconds and show local files only.
+
+1. Unlock the keyring, for example by signing in to the computer's desktop.
+2. Run `colab-monitor status` again.
+
+If you sign in to Colab with Application Default Credentials, pass `--auth adc` instead: it doesn't
+use the keyring.
+
 ## A machine looks idle while you use `colab ssh`
 
-`Running` means the CLI is in `colab run`, `colab exec`, `colab repl`, or `colab console`. An SSH
-session does not set that flag, so the machine shows as idle even though it still bills. Prefer
-`colab run` / `colab exec` with output redirected to `~/colab-runs` when you want the dashboard to
-track the job.
+`Running` means the CLI is in `colab run`, `colab exec`, or `colab repl` (or `colab console`, which
+`colab` CLI 0.8.0 removed). An SSH session does not set that flag, and neither does a command run
+with `colab ssh -- CMD`, so the machine shows as idle even though it still bills and the command
+still runs. Prefer `colab run` / `colab exec` with output redirected to `~/colab-runs` when you want
+the dashboard to track the job.
 ## A job failed with "Timeout waiting for output"
 
 That message comes from the `colab` CLI, not from Colab Monitor. `--timeout` on `colab run` and

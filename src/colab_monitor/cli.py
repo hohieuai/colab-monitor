@@ -35,6 +35,8 @@ TOKEN_PATH = "~/.config/colab-cli/token.json"
 # Must match google-colab-cli's auth.py (service_name / username).
 OAUTH_KEYRING_SERVICE = "google-colab-cli"
 OAUTH_KEYRING_USER = "oauth_token"
+# A locked keyring waits for an unlock prompt that a terminal, an SSH session or an agent never sees.
+KEYRING_TIMEOUT = 5.0
 
 STATUS_WORDS = {"busy": "running", "gone": "released"}
 STATUS_COLORS = {"busy": "green", "idle": "yellow", "stopping": "dim", "orphan": "red", "unknown": "dim"}
@@ -185,24 +187,53 @@ def _find_dashboard(args: argparse.Namespace) -> tuple[DashboardSource, dict] | 
         return None
 
 
+class KeyringLocked(Exception):
+    """The OS keyring didn't answer in time, usually because it is waiting to be unlocked."""
+
+
+def _keyring_token() -> str | None:
+    """The token in the OS keyring, or None. Raises KeyringLocked if the keyring doesn't answer."""
+    import keyring
+
+    found: list[str | None] = []
+
+    def read() -> None:
+        try:
+            found.append(keyring.get_password(OAUTH_KEYRING_SERVICE, OAUTH_KEYRING_USER))
+        except Exception:  # noqa: BLE001 - no backend, or another OS error
+            found.append(None)
+
+    # A thread blocked on the keyring can't be stopped; as a daemon it doesn't keep the command alive.
+    reader = threading.Thread(target=read, daemon=True)
+    reader.start()
+    reader.join(KEYRING_TIMEOUT)
+    if reader.is_alive():
+        raise KeyringLocked
+    return found[0]
+
+
 def _oauth_token_json() -> str | None:
     """The colab CLI's saved OAuth token JSON, or None. Never prompts for a new sign-in.
 
-    Newer CLI releases store the token in the OS keyring and delete the legacy
-    `token.json`. Older releases (and a failed keyring write) still use the file.
+    Since 0.8.0 the CLI stores the token in the OS keyring and deletes the legacy `token.json`.
+    Older releases (and a failed keyring write) still use the file. Raises KeyringLocked when the
+    keyring doesn't answer and there is no file to use instead.
     """
+    locked = False
     try:
-        import keyring
-
-        token = keyring.get_password(OAUTH_KEYRING_SERVICE, OAUTH_KEYRING_USER)
+        token = _keyring_token()
         if token:
             return token
-    except Exception:  # noqa: BLE001 - missing keyring, locked backend, or other OS error
+    except KeyringLocked:
+        locked = True
+    except Exception:  # noqa: BLE001 - no keyring package, or another OS error
         pass
     path = os.path.expanduser(TOKEN_PATH)
     if os.path.exists(path):
         with open(path, encoding="utf-8") as f:
             return f.read()
+    if locked:
+        raise KeyringLocked
     return None
 
 
@@ -241,6 +272,12 @@ def _connect(args: argparse.Namespace, usage_log: UsageLog) -> ApiPoller | None:
 
     try:
         session = _quiet_session(args.auth)
+    except KeyringLocked:
+        server._err(
+            f"The OS keyring didn't answer within {KEYRING_TIMEOUT:g} seconds; showing local files only."
+        )
+        server._err("Unlock your keyring, or pass --auth adc to use Application Default Credentials.")
+        return None
     except Exception as e:  # noqa: BLE001 - any sign-in problem means local files only
         server._err(f"Couldn't sign in to Colab ({e}); showing local files only.")
         server._err("Run `colab sessions` once to sign in again.")

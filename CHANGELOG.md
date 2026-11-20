@@ -30,6 +30,15 @@ All notable changes to this project are documented here. The format follows
   foot of the sidebar.
 - The usage chart is drawn in ink, and the log viewer follows the light or dark theme.
 - Text that was too faint to read easily now meets WCAG AA contrast.
+- The docs cover `colab` CLI 0.8.0: `colab console` is gone, and a command run with
+  `colab ssh -- CMD` leaves its machine idle on the dashboard.
+
+### Fixed
+
+- `status` and `watch` no longer hang when the OS keyring is locked, as it can be on Linux over SSH
+  or for an agent. They wait 5 seconds, then use the legacy token file or show local files only and
+  say how to unlock the keyring. Since `colab` CLI 0.8.0 the sign-in is only in the keyring. The
+  agent skill's sign-in check waits 5 seconds too.
 
 ## [0.0.1] - 2026-11-13
 
